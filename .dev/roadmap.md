@@ -505,7 +505,7 @@ Encrypt the permissions payload with the selected algorithms; embed `generatedAt
 
 ### Revocation system
 
-One notice stream, in positions that follow commit order: a principal's revocation, a category change, the baseline change, a global revocation, and a sign-out relayed from the identity provider. Push channel (SSE or WebSocket) carrying positions as event ids; a poll endpoint returning the notices after a position, answered within a deadline. See [security-workflow.md](design/security-workflow.md) and [schema.md](design/schema.md).
+One notice stream, in positions that follow commit order: a principal's revocation, a category change, the baseline change, a sign-out of everyone, and a sign-out relayed from the identity provider. Push channel (SSE or WebSocket) carrying positions as event ids; a poll endpoint returning the notices after a position, answered within a deadline. See [security-workflow.md](design/security-workflow.md) and [schema.md](design/schema.md).
 
 ### Audit logging
 

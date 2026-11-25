@@ -76,7 +76,7 @@ import {
 	nominate,
 	personCaller,
 	revokeNomination,
-	PLATFORM_REVOCATION_REASONS,
+	SIGN_OUT_EVERYONE_REASONS,
 	postBackChannelLogout,
 	type ProblemDetails,
 	PROBLEMS,
@@ -100,7 +100,7 @@ import {
 	retireResource,
 	revokeApplicationKey,
 	revokedApplicationKeyOf,
-	revokeGlobally,
+	signOutEveryone,
 	revokeGrant,
 	revokeIdentity,
 	revokeResourceUsers,
@@ -465,10 +465,10 @@ const OPERATIONS: readonly Expected[] = [
 		target: `/admin/nominations/${GRANT}`,
 	},
 	{
-		body: { reason: 'compromised account', subject: 'auth0|bo+test/=' },
+		body: { reason: 'credentialCompromise', subject: 'auth0|bo+test/=' },
 		call: (caller) =>
 			revokeIdentity(caller, {
-				reason: 'compromised account',
+				reason: 'credentialCompromise',
 				subject: 'auth0|bo+test/=',
 			}),
 		method: 'POST',
@@ -491,10 +491,10 @@ const OPERATIONS: readonly Expected[] = [
 	},
 	{
 		body: { confirm: true, reason: 'key compromise' },
-		call: (caller) => revokeGlobally(caller, { reason: 'key compromise' }),
+		call: (caller) => signOutEveryone(caller, { reason: 'key compromise' }),
 		method: 'POST',
-		name: 'revokeGlobally',
-		target: '/admin/revocations/global',
+		name: 'signOutEveryone',
+		target: '/admin/sign-outs',
 	},
 	{
 		body: { capabilities: ['record.view'] },
@@ -936,6 +936,7 @@ suite('the problem codes and reason vocabularies', () => {
 				'alreadyExists',
 				'alreadyHolds',
 				'alreadyRequested',
+				'alreadyRevoked',
 				'applicationKeyLimit',
 				'doesNotHold',
 				'grantReplaced',
@@ -947,6 +948,7 @@ suite('the problem codes and reason vocabularies', () => {
 				'nominationRevoked',
 				'nomineeAlreadyAdministrator',
 				'nomineeAlreadyNominated',
+				'notRevoked',
 				'requestDecided',
 				'requestLapsed',
 				'resourceNeedsAnOwner',
@@ -955,6 +957,9 @@ suite('the problem codes and reason vocabularies', () => {
 			415: ['unsupportedMediaType'],
 			422: [
 				'importNeedsAnAudience',
+				'invalidRevocationReason',
+				'invalidSignOutReason',
+				'notConfirmed',
 				'orphanedResourceExpiryRequired',
 				'orphanedResourceGrantTooLong',
 				'ownerGrantsDoNotExpire',
@@ -974,9 +979,9 @@ suite('the problem codes and reason vocabularies', () => {
 			applicationKey: APPLICATION_KEY_REVOCATION_REASONS,
 			grant: GRANT_REVOCATION_REASONS,
 			identity: IDENTITY_REVOCATION_REASONS,
-			platform: PLATFORM_REVOCATION_REASONS,
 			resource: RESOURCE_REVOCATION_REASONS,
 			restoration: RESTORATION_REASONS,
+			signOutEveryone: SIGN_OUT_EVERYONE_REASONS,
 			suppression: SUPPRESSION_REASONS,
 		};
 		const accepted = Object.fromEntries(
@@ -995,9 +1000,9 @@ suite('the problem codes and reason vocabularies', () => {
 				'termsViolation',
 			],
 			identity: ['accountClosed', 'credentialCompromise', 'securityIncident', 'termsViolation'],
-			platform: ['credentialCompromise', 'keyCompromise', 'securityIncident'],
-			resource: ['credentialCompromise', 'custodianRequest', 'keyCompromise', 'securityIncident'],
+			resource: ['credentialCompromise', 'custodianRequest', 'securityIncident'],
 			restoration: ['custodianRequest', 'issueResolved'],
+			signOutEveryone: ['credentialCompromise', 'securityIncident'],
 			suppression: [
 				'consentWithdrawn',
 				'custodianRequest',

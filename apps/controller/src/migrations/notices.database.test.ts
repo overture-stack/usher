@@ -41,7 +41,7 @@ const ONE_OF_EACH_KIND: readonly NoticeParts[] = [
 	{ kind: 'principal', subject: noticeSubject({ subject: SUBJECTS.ana }) },
 	{ kind: 'category', resourceExternalId: 'STUDY-A1' },
 	{ kind: 'baseline' },
-	{ kind: 'global' },
+	{ kind: 'signOutEveryone' },
 	{ audience: fixtureApplicationId('ims-arranger'), kind: 'servedResources' },
 ];
 
@@ -242,7 +242,7 @@ suite('the notice stream', () => {
 		await first.query('BEGIN');
 		const firstPosition = await insertNotice(first, { kind: 'baseline' });
 		await second.query('BEGIN');
-		const secondCommitted = insertAndCommit(second, { kind: 'global' });
+		const secondCommitted = insertAndCommit(second, { kind: 'signOutEveryone' });
 		await untilBlocked(owner, secondCommitted);
 		const firstCommitted = await commitNow(first, firstPosition);
 		const { earlier, later } = laterAndEarlier(firstCommitted, await secondCommitted);
@@ -273,7 +273,7 @@ suite('the notice stream', () => {
 		);
 		await untilSleeping(owner, firstPid);
 		await second.query('BEGIN');
-		const secondCommitted = insertAndCommit(second, { kind: 'global' });
+		const secondCommitted = insertAndCommit(second, { kind: 'signOutEveryone' });
 		const [slowRow] = (await slowInsert).rows;
 		await untilBlocked(owner, secondCommitted);
 		const firstCommitted = await commitNow(first, BigInt(slowRow?.position ?? '0'));

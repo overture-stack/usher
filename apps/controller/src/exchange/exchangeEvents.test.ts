@@ -129,7 +129,7 @@ suite("the exchange's token.exchange events", () => {
 	});
 
 	test('records each refusal the store holds for a principal as denied under its own reason, naming the refused subject', () => {
-		const events = (['revokedPlatform', 'revokedPrincipal', 'signedOutSession'] as const).map((reason) =>
+		const events = (['signedOutEveryone', 'revokedPrincipal', 'signedOutSession'] as const).map((reason) =>
 			deniedExchangeEvent({
 				reason,
 				refusedSubject: 'subject-ana',
@@ -145,7 +145,7 @@ suite("the exchange's token.exchange events", () => {
 				Object.hasOwn(data, 'userId'),
 			]),
 			[
-				['denied', 'revokedPlatform', 'subject-ana', false],
+				['denied', 'signedOutEveryone', 'subject-ana', false],
 				['denied', 'revokedPrincipal', 'subject-ana', false],
 				['denied', 'signedOutSession', 'subject-ana', false],
 			],

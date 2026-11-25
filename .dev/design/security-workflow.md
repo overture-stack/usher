@@ -610,14 +610,17 @@ drop every token naming it, the anonymous one included. A change to the baseline
 since every signed-in payload carries the baseline's grants too. See
 [decisions.md](decisions.md#a-category-change-is-announced-to-the-applications-that-serve-the-resource).
 
-**Revoking a principal entirely is a row of its own.** A row in `principal_revocations`, lifted to
-reverse it, stops the person at the exchange with `401`, and a principal notice drops their entries
-at every Bridge. See [schema.md](schema.md), decision A, proposed.
+**Revoking a principal entirely is a row of its own.** A row in `principal_revocations` stops the
+person at the exchange with `401` while it stands, and a principal notice drops their entries at
+every Bridge. A lift keeps the row and needs a fresh sign-in: a token issued at or before the lift is
+refused, since the lift is stamped on the store's clock and the token's `iat` on the identity
+provider's, so a sign-in a few seconds after a lift can be refused when the provider's clock runs
+behind, and the person signs in again. See [schema.md](schema.md), decision A.
 
 ### Propagation: push + poll
 
 **One notice stream carries every kind of notice**: a principal's revocation, a category change,
-the baseline change, a global revocation and a sign-out. Each notice holds a position in one
+the baseline change, a sign-out of everyone and a sign-out. Each notice holds a position in one
 sequence the Controller issues, and push and poll serve the same stream.
 
 **Push (primary):** the Controller pushes each notice to connected Bridges, carrying its position as
@@ -699,7 +702,8 @@ no shared in-memory state" row is what catches the ones that do not.
 
 - **Single user:** the standard case.
 - **All users of a resource:** when a resource is misconfigured or its data compromised.
-- **Global:** break-glass; all active Usher tokens platform-wide are invalidated. The
+- **Everyone:** a sign-out of everyone, not a revocation; see [glossary.md](glossary.md) § Sign-out. Every
+  sign-in token issued before it is refused and every Bridge drops every Usher token it holds. The
   management UI must require explicit operator confirmation for this action.
 
 ### Interaction with the token refresh fast path

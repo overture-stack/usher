@@ -35,7 +35,7 @@ export const SCHEMA_AREAS: readonly DiagramArea[] = Object.freeze([
 		title: 'Grants and invitations',
 	},
 	{
-		tables: ['principal_revocations', 'global_revocations', 'sid_sign_outs', 'subject_sign_outs', 'exchanged_sids'],
+		tables: ['principal_revocations', 'everyone_sign_outs', 'sid_sign_outs', 'subject_sign_outs', 'exchanged_sids'],
 		title: 'Revocations and sign-outs',
 	},
 	{

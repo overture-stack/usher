@@ -9,8 +9,8 @@ export type Notice =
 	| { cursor: string; kind: 'baseline'; v: 1 }
 	/** A category change, naming the resource as it is named by a payload's `permissions` keys. */
 	| { cursor: string; kind: 'category'; resource: string; v: 1 }
-	/** A global change, invalidating every cached entry. */
-	| { cursor: string; kind: 'global'; v: 1 }
+	/** A sign-out of everyone, invalidating every cached entry. */
+	| { cursor: string; kind: 'signOutEveryone'; v: 1 }
 	/** A principal's revocation or sign-out, naming the subject by its tag. */
 	| { cursor: string; kind: 'principal'; subjectTag: string; v: 1 }
 	/**
@@ -53,7 +53,7 @@ export type PollAnswerValidationResult =
 export const NOTICE_RULES = {
 	cursor: 'cursor is a non-empty string',
 	isMap: 'a notice is a map',
-	kind: 'kind is principal, category, baseline, global or servedResources',
+	kind: 'kind is principal, category, baseline, signOutEveryone or servedResources',
 	members: 'a notice carries only the members defined for its kind',
 	resource:
 		'a category notice names its resource, a non-empty string other than __proto__, holding no marker read specially by Arranger',
@@ -81,9 +81,9 @@ const MEMBERS_BY_KIND: ReadonlyMap<unknown, ReadonlySet<string>> = new Map(
 	Object.entries({
 		baseline: new Set(['cursor', 'kind', 'v']),
 		category: new Set(['cursor', 'kind', 'resource', 'v']),
-		global: new Set(['cursor', 'kind', 'v']),
 		principal: new Set(['cursor', 'kind', 'subjectTag', 'v']),
 		servedResources: new Set(['cursor', 'kind', 'v']),
+		signOutEveryone: new Set(['cursor', 'kind', 'v']),
 	} satisfies Readonly<Record<Notice['kind'], ReadonlySet<string>>>),
 );
 

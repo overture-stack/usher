@@ -35,7 +35,7 @@ export const listsServedVersion = (header: string | undefined): boolean =>
 	(header ?? '').split(',').some((listed) => listed.trim() === String(SERVED_NOTICE_VERSION));
 
 /**
- * Whether an audience receives a notice: every principal, baseline and global notice; a
+ * Whether an audience receives a notice: every principal, baseline and signOutEveryone notice; a
  * servedResources notice naming it; and a category notice whose resource it served when the notice
  * was read.
  *

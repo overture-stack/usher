@@ -52,7 +52,7 @@ const {
 	categories,
 	changeRecords,
 	exchangedSids,
-	globalRevocations,
+	everyoneSignOuts,
 	grantDecisions,
 	grantRequests,
 	grants,
@@ -86,7 +86,7 @@ const UUID_KEYED_TABLES = [
 	capabilities,
 	categories,
 	changeRecords,
-	globalRevocations,
+	everyoneSignOuts,
 	grantDecisions,
 	GRANT_OPERATIONS,
 	grantRequests,
@@ -121,8 +121,8 @@ const TWO_OF_EACH: PolicyFixture = {
 		readers: { members: ['ana'], resource: 'STUDY-A1' },
 	},
 	revocations: [
-		{ lifted: {}, reason: 'account reported compromised', user: 'cy' },
-		{ reason: 'account reported compromised', user: 'cy' },
+		{ lifted: {}, reason: 'credentialCompromise', user: 'cy' },
+		{ reason: 'credentialCompromise', user: 'cy' },
 	],
 };
 
@@ -202,11 +202,11 @@ suite("the schema's shape", () => {
 					}),
 				),
 			);
-			await inTurn(['securityIncident', 'keyCompromise'], (reasonCode) =>
-				insertRow(owner, globalRevocations, {
-					[globalRevocations.columns.reasonCode]: reasonCode,
-					[globalRevocations.columns.revokedAt]: new Date(),
-					[globalRevocations.columns.revokedBy]: steward,
+			await inTurn(['securityIncident', 'credentialCompromise'], (reasonCode) =>
+				insertRow(owner, everyoneSignOuts, {
+					[everyoneSignOuts.columns.reasonCode]: reasonCode,
+					[everyoneSignOuts.columns.signedOutAt]: new Date(),
+					[everyoneSignOuts.columns.signedOutBy]: steward,
 				}),
 			);
 			await inTurn([1, 2], (days) =>
@@ -309,7 +309,7 @@ suite("the schema's shape", () => {
 			applications: [[applications.columns.registeredAt, 4]],
 			auditLog: [[auditLog.columns.occurredAt, 31]],
 			exchangedSids: [[exchangedSids.columns.expiresAt, 57]],
-			globalRevocations: [[globalRevocations.columns.revokedAt, 35]],
+			everyoneSignOuts: [[everyoneSignOuts.columns.signedOutAt, 35]],
 			grantDecisions: [[grantDecisions.columns.decidedAt, 15]],
 			grantOperations: [
 				[GRANT_OPERATIONS.columns.expiresAt, 39],
@@ -514,10 +514,10 @@ suite("the schema's shape", () => {
 				[usedChannelAssertions.columns.assertionId]: 'instant-probe-assertion',
 				...timed(times.usedChannelAssertions),
 			});
-			const globalRevocation = await insertRow(toronto, globalRevocations, {
-				[globalRevocations.columns.reasonCode]: 'securityIncident',
-				[globalRevocations.columns.revokedBy]: steward,
-				...timed(times.globalRevocations),
+			const signOutEveryone = await insertRow(toronto, everyoneSignOuts, {
+				[everyoneSignOuts.columns.reasonCode]: 'securityIncident',
+				[everyoneSignOuts.columns.signedOutBy]: steward,
+				...timed(times.everyoneSignOuts),
 			});
 			await insertRow(toronto, exchangedSids, {
 				[exchangedSids.columns.idpIssuer]: DEFAULT_FIXTURE_ISSUER,
@@ -663,10 +663,10 @@ suite("the schema's shape", () => {
 					table: settings,
 				},
 				{
-					columns: times.globalRevocations,
-					key: globalRevocations.columns.id,
-					keyValue: globalRevocation[globalRevocations.columns.id],
-					table: globalRevocations,
+					columns: times.everyoneSignOuts,
+					key: everyoneSignOuts.columns.id,
+					keyValue: signOutEveryone[everyoneSignOuts.columns.id],
+					table: everyoneSignOuts,
 				},
 				{
 					columns: times.exchangedSids,
@@ -795,6 +795,16 @@ suite("the schema's shape", () => {
 				values: ['accepted', 'declined'],
 			},
 			{ column: notices.columns.kind, table: notices, values: NOTICE_KINDS },
+			{
+				column: principalRevocations.columns.reason,
+				table: principalRevocations,
+				values: ['accountClosed', 'credentialCompromise', 'securityIncident', 'termsViolation'],
+			},
+			{
+				column: everyoneSignOuts.columns.reasonCode,
+				table: everyoneSignOuts,
+				values: ['credentialCompromise', 'securityIncident'],
+			},
 			{
 				column: auditLog.columns.severity,
 				table: auditLog,

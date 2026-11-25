@@ -182,8 +182,8 @@ rebuilt. Where that read comes from is therefore the whole of the work rather th
   category. This is the control standing between an administrator and community-governed data, so
   its own constraints are a governance question rather than a UI one; see the appointment item in
   [decisions.md](decisions.md).
-- **Revocation controls:** trigger emergency revocation for a user, all users of a resource, or
-  platform-wide (global revocation requires explicit confirmation).
+- **Revocation controls:** trigger emergency revocation for a user or all users of a resource, and
+  sign out everyone (a sign-out of everyone requires explicit confirmation).
 - **Audit log:** record of all access decisions, permission changes, and revocation events. Scope,
   retention policy, and queryability are not yet designed.
 

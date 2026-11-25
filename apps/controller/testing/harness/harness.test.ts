@@ -1127,7 +1127,7 @@ suite('a snapshot of a running harness, restored', () => {
 		await seedPolicy(migration, {
 			resources: { 'STUDY-B2': { baseTier: 'grant', name: 'B2' } },
 		});
-		await insertNotices(migration, [{ kind: 'global' }, { kind: 'global' }]);
+		await insertNotices(migration, [{ kind: 'signOutEveryone' }, { kind: 'signOutEveryone' }]);
 
 		await assert.rejects(restoreSnapshot(harness, snapshot), refusalNaming(ENVIRONMENT_VARIABLES.keyEncryptionKey));
 
@@ -1175,7 +1175,7 @@ suite('the read-only role', () => {
 
 		const { rows } = await reader.query<{ external_id: string }>('SELECT external_id FROM usher.resources');
 		const written = await reader
-			.query("INSERT INTO usher.notices (kind, created_at) VALUES ('global', now())")
+			.query("INSERT INTO usher.notices (kind, created_at) VALUES ('signOutEveryone', now())")
 			.then(
 				() => 'written',
 				(error: unknown) => (error instanceof Error ? error.message : String(error)),

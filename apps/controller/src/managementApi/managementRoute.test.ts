@@ -656,10 +656,10 @@ suite('admitting a request to a management operation', () => {
 		shown.forEach((answer) => assert.deepEqual(answer, shown[0]));
 	});
 
-	test('records a revoked principal, a platform revocation or a session signed out as managementToken.refusal naming the subject, and answers a store that cannot say 503 with a line', async (context) => {
+	test('records a revoked principal, a sign-out of everyone or a session signed out as managementToken.refusal naming the subject, and answers a store that cannot say 503 with a line', async (context) => {
 		const refusals: (StoredRefusal | Error)[] = [
 			'revokedPrincipal',
-			'revokedPlatform',
+			'signedOutEveryone',
 			'signedOutSession',
 			Object.assign(new Error('the store is down'), { code: 'ECONNREFUSED' }),
 		];
@@ -694,7 +694,7 @@ suite('admitting a request to a management operation', () => {
 			]),
 			[
 				[{ type: 'anonymous' }, 'managementToken.refusal', 'revokedPrincipal', 'subject-ana'],
-				[{ type: 'anonymous' }, 'managementToken.refusal', 'revokedPlatform', 'subject-ana'],
+				[{ type: 'anonymous' }, 'managementToken.refusal', 'signedOutEveryone', 'subject-ana'],
 				[{ type: 'anonymous' }, 'managementToken.refusal', 'signedOutSession', 'subject-ana'],
 			],
 		);

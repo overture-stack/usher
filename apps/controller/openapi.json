@@ -952,20 +952,6 @@
 				"examples": ["STUDY-A1"],
 				"type": "string"
 			},
-			"GlobalRevocation": {
-				"properties": {
-					"confirm": {
-						"description": "`true`; any other value is refused with `422`.",
-						"type": "boolean"
-					},
-					"reason": {
-						"description": "`credentialCompromise`, `keyCompromise` or `securityIncident`; any other value is refused with `422`.",
-						"type": "string"
-					}
-				},
-				"required": ["confirm", "reason"],
-				"type": "object"
-			},
 			"Grant": {
 				"additionalProperties": false,
 				"properties": {
@@ -1618,13 +1604,34 @@
 				"required": ["subject"],
 				"type": "object"
 			},
+			"PrincipalLiftAnswer": {
+				"additionalProperties": false,
+				"description": "A principal's lift of its standing revocation, as recorded.",
+				"properties": {
+					"liftedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the revocation was lifted."
+					},
+					"revokedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the revocation being lifted was made."
+					},
+					"subject": {
+						"description": "The principal's subject.",
+						"type": "string"
+					}
+				},
+				"required": ["liftedAt", "revokedAt", "subject"],
+				"type": "object"
+			},
 			"PrincipalRevocation": {
 				"properties": {
 					"reason": {
-						"description": "`accountClosed`, `credentialCompromise`, `securityIncident` or `termsViolation`; any other value is refused with `422`.",
+						"description": "`accountClosed`, `credentialCompromise`, `securityIncident` or `termsViolation`; any other value is refused with `422` `invalidRevocationReason`.",
 						"type": "string"
 					},
 					"subject": {
+						"description": "The principal's subject: the `sub` claim of their token, under the trusted issuer.",
 						"type": "string"
 					}
 				},
@@ -1634,10 +1641,35 @@
 			"PrincipalRevocationLift": {
 				"properties": {
 					"subject": {
+						"description": "The subject of the principal whose standing revocation is lifted.",
 						"type": "string"
 					}
 				},
 				"required": ["subject"],
+				"type": "object"
+			},
+			"PrincipalRevocationAnswer": {
+				"additionalProperties": false,
+				"description": "A principal's revocation, as recorded.",
+				"properties": {
+					"reason": {
+						"description": "The reason given.",
+						"type": "string"
+					},
+					"revokedAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the revocation was made."
+					},
+					"seenBefore": {
+						"description": "Whether Usher had met the subject before this request. False when Usher recorded the subject just now.",
+						"type": "boolean"
+					},
+					"subject": {
+						"description": "The principal's subject.",
+						"type": "string"
+					}
+				},
+				"required": ["reason", "revokedAt", "seenBefore", "subject"],
 				"type": "object"
 			},
 			"ProblemDetails": {
@@ -2015,7 +2047,7 @@
 			"ResourceRevocation": {
 				"properties": {
 					"reason": {
-						"description": "`credentialCompromise`, `custodianRequest`, `keyCompromise` or `securityIncident`; any other value is refused with `422`.",
+						"description": "`credentialCompromise`, `custodianRequest` or `securityIncident`; any other value is refused with `422`.",
 						"type": "string"
 					}
 				},
@@ -2370,6 +2402,36 @@
 				"enum": ["critical", "error", "info", "warning"],
 				"type": "string"
 			},
+			"SignOutEveryone": {
+				"properties": {
+					"confirm": {
+						"description": "`true`; any other value is refused with `422` `notConfirmed`.",
+						"type": "boolean"
+					},
+					"reason": {
+						"description": "`credentialCompromise` or `securityIncident`; any other value is refused with `422` `invalidSignOutReason`.",
+						"type": "string"
+					}
+				},
+				"required": ["confirm", "reason"],
+				"type": "object"
+			},
+			"SignOutEveryoneAnswer": {
+				"additionalProperties": false,
+				"description": "A sign-out of everyone, as recorded.",
+				"properties": {
+					"reason": {
+						"description": "The reason given: `credentialCompromise` or `securityIncident`.",
+						"type": "string"
+					},
+					"signedOutAt": {
+						"$ref": "#/components/schemas/Instant",
+						"description": "When the sign-out was recorded. Every sign-in token issued before it is refused."
+					}
+				},
+				"required": ["reason", "signedOutAt"],
+				"type": "object"
+			},
 			"StudyReason": {
 				"enum": [
 					"badFirstCharacter",
@@ -2495,7 +2557,7 @@
 			},
 			"Administrator": {
 				"additionalProperties": false,
-				"description": "A live administrator of Usher.",
+				"description": "An administrator of Usher whom no removal has ended, revoked or not.",
 				"properties": {
 					"acceptedAt": {
 						"$ref": "#/components/schemas/Instant",
@@ -2506,19 +2568,23 @@
 						"type": "string",
 						"description": "The nomination the administrator accepted."
 					},
+					"revoked": {
+						"description": "Whether the administrator's person holds a standing principal revocation. A revoked administrator acts as no administrator until the revocation is lifted, and is listed so another administrator can lift it or remove them.",
+						"type": "boolean"
+					},
 					"subject": {
 						"type": "string",
 						"description": "The administrator's subject under the trusted issuer."
 					}
 				},
-				"required": ["acceptedAt", "nominationId", "subject"],
+				"required": ["acceptedAt", "nominationId", "revoked", "subject"],
 				"type": "object"
 			},
 			"AdministratorList": {
 				"additionalProperties": false,
 				"properties": {
 					"administrators": {
-						"description": "Every live administrator, the oldest acceptance first.",
+						"description": "Every administrator whom no removal has ended, revoked ones included and marked, the oldest acceptance first.",
 						"items": {
 							"$ref": "#/components/schemas/Administrator"
 						},
@@ -2574,7 +2640,7 @@
 	"paths": {
 		"/admin/administrators": {
 			"get": {
-				"description": "Lists Usher's live administrators, the oldest acceptance first, each by subject, the instant it was accepted and the nomination accepted. Only an administrator can list them. Nothing is logged.",
+				"description": "Lists Usher's administrators whom no removal has ended, the oldest acceptance first, each by subject, the instant it was accepted, the nomination accepted, and whether they are revoked. A revoked administrator acts as no administrator until the revocation is lifted, and is listed so you can lift it or remove them. Only an administrator can list them. Nothing is logged.",
 				"operationId": "listAdministrators",
 				"responses": {
 					"200": {
@@ -2585,7 +2651,7 @@
 								}
 							}
 						},
-						"description": "Every live administrator, the oldest acceptance first."
+						"description": "Every administrator whom no removal has ended, revoked ones marked, the oldest acceptance first."
 					},
 					"400": {
 						"$ref": "#/components/responses/Unreadable"
@@ -5556,7 +5622,7 @@
 		},
 		"/admin/people/revocations": {
 			"post": {
-				"description": "Revokes a principal entirely, by subject, for platform administrators. While the revocation stands, the exchange refuses the principal's every credential at every audience, and their grants are kept.\n\nA principal notice names them to every application, and the audit event `identity.revocation` records the revocation.",
+				"description": "Revokes a principal entirely, by subject, for platform administrators. While the revocation stands, the exchange issues the principal no token at any audience, and each application's Bridge drops the tokens it holds for them. Their grants are kept, not revoked, so a lift restores them as they were.\n\nUsher reads the subject as the `sub` claim of the person's token. A subject Usher has never met is recorded now and answered `seenBefore: false`; one it has met is answered `seenBefore: true`. You can revoke yourself while another live administrator remains.\n\nChecked in this order:\n\n1. You are not a platform administrator: `403` `administratorOnly`, before the body is read. A service account receives `serviceAccountNotPermitted`.\n2. The body is not the shape this operation takes: `400`, and nothing is written.\n3. The reason is not one of `accountClosed`, `credentialCompromise`, `securityIncident` or `termsViolation`: `422` `invalidRevocationReason`.\n4. The principal already holds a standing revocation: `409` `alreadyRevoked`. A concurrent duplicate of the same revocation also answers `409`, and writes nothing.\n5. The principal is a live administrator and no other live administrator would remain: `409` `lastAdministrator`.\n\nThe answer is the subject, the reason, the instant of the revocation and `seenBefore`. Usher logs the revocation as the audit event `identity.revocation`, at `critical`, and a principal notice names the principal to every application.",
 				"operationId": "revokePrincipal",
 				"requestBody": {
 					"content": {
@@ -5602,6 +5668,28 @@
 						},
 						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["alreadyRevoked", "lastAdministrator"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`alreadyRevoked`: the principal already holds a standing revocation, or a concurrent revocation of them committed first. `lastAdministrator`: the principal is a live administrator, and no other live administrator would remain."
+					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
 					},
@@ -5612,17 +5700,36 @@
 						"content": {
 							"application/problem+json": {
 								"schema": {
-									"$ref": "#/components/schemas/ProblemDetails"
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["invalidRevocationReason"]
+												}
+											},
+											"type": "object"
+										}
+									]
 								}
 							}
 						},
-						"description": "The reason is not one of the identity revocation reasons."
+						"description": "`invalidRevocationReason`: the reason is not one of the identity revocation reasons."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
 					},
-					"2XX": {
-						"description": "The principal is revoked."
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PrincipalRevocationAnswer"
+								}
+							}
+						},
+						"description": "The principal is revoked. `seenBefore` is false when Usher recorded the subject just now."
 					}
 				},
 				"security": [
@@ -5636,7 +5743,7 @@
 		},
 		"/admin/people/revocations/lifts": {
 			"post": {
-				"description": "Lifts a principal's standing revocation, by subject, for platform administrators, keeping its history. The exchange issues them tokens again, from the grants they held throughout.\n\nA principal notice names them to every application, and the audit event `identity.revocationLift` records the lift.",
+				"description": "Lifts a principal's standing revocation, by subject, for platform administrators. The revocation is kept as written, with its lift beside it, and the principal's grants are untouched.\n\nA lift needs a fresh sign-in. The exchange issues the principal tokens again only to a sign-in after the lift: a token issued at or before the lift is still refused, so the person signs in again. A sign-out, or a sign-out of everyone, recorded since still applies.\n\nChecked in this order:\n\n1. You are not a platform administrator: `403` `administratorOnly`, before the body is read. A service account receives `serviceAccountNotPermitted`.\n2. The body is not the shape this operation takes: `400`, and nothing is written.\n3. Usher has never met the subject, or the subject holds no standing revocation: `409` `notRevoked`.\n\nThe answer is the subject, the instant the revocation was made and the instant of the lift. Usher logs the lift as the audit event `identity.revocationLift`, at `critical`, and a principal notice names the principal to every application.",
 				"operationId": "liftPrincipalRevocation",
 				"requestBody": {
 					"content": {
@@ -5682,6 +5789,28 @@
 						},
 						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["notRevoked"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`notRevoked`: Usher has never met the subject, or the subject holds no standing revocation."
+					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
 					},
@@ -5691,7 +5820,14 @@
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
 					},
-					"2XX": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PrincipalLiftAnswer"
+								}
+							}
+						},
 						"description": "The revocation is lifted."
 					}
 				},
@@ -7322,15 +7458,15 @@
 				"tags": ["Resources"]
 			}
 		},
-		"/admin/revocations/global": {
+		"/admin/sign-outs": {
 			"post": {
-				"description": "Revokes across the whole instance, for platform administrators, confirmed in the request with `confirm: true`. A global notice reaches every application, and the audit event `platform.revocation` records it at `critical`.",
-				"operationId": "revokeGlobally",
+				"description": "Signs out everyone, for platform administrators, confirmed in the request with `confirm: true`. Every sign-in token issued before the sign-out is refused at the exchange and at the Management API, whoever holds it, and grants are kept. A signOutEveryone notice reaches every application, whose Bridges drop every token they hold, and the audit event `identity.signOutEveryone` records it at `critical`.\n\nIt ends no session at the identity provider. A live provider session or a refresh token gets a fresh sign-in token, issued after the sign-out, which is accepted. So it answers sign-in tokens that may have leaked, and not a stolen refresh token, a hijacked provider session or a stolen signing key. End every session at the identity provider first, then record the sign-out: in the reverse order, a hijacked session can get a fresh token between the two steps, and that token is accepted until it expires.\n\nChecked in this order:\n\n1. You are not a platform administrator: `403` `administratorOnly`, before the body is read. A service account receives `serviceAccountNotPermitted`.\n2. The body is not the shape this operation takes, `confirm` not a boolean included: `400`, and nothing is written.\n3. `confirm` is not `true`: `422` `notConfirmed`.\n4. The reason is not `credentialCompromise` or `securityIncident`: `422` `invalidSignOutReason`.\n\nThe answer is the reason and the instant of the sign-out.",
+				"operationId": "signOutEveryone",
 				"requestBody": {
 					"content": {
 						"application/json": {
 							"schema": {
-								"$ref": "#/components/schemas/GlobalRevocation"
+								"$ref": "#/components/schemas/SignOutEveryone"
 							}
 						}
 					},
@@ -7380,17 +7516,36 @@
 						"content": {
 							"application/problem+json": {
 								"schema": {
-									"$ref": "#/components/schemas/ProblemDetails"
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["notConfirmed", "invalidSignOutReason"]
+												}
+											},
+											"type": "object"
+										}
+									]
 								}
 							}
 						},
-						"description": "`confirm` is other than `true`, or the reason is not one of the global revocation reasons."
+						"description": "`notConfirmed`: `confirm` is other than `true`. `invalidSignOutReason`: the reason is not `credentialCompromise` or `securityIncident`."
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
 					},
-					"2XX": {
-						"description": "The instance is revoked."
+					"201": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SignOutEveryoneAnswer"
+								}
+							}
+						},
+						"description": "Everyone is signed out: every sign-in token issued before the answer's instant is refused."
 					}
 				},
 				"security": [
@@ -7398,7 +7553,7 @@
 						"managementToken": []
 					}
 				],
-				"summary": "Revokes across the whole instance",
+				"summary": "Signs out everyone",
 				"tags": ["Instance"]
 			}
 		},
@@ -8478,7 +8633,7 @@
 			"name": "People"
 		},
 		{
-			"description": "The whole instance: a global revocation and a role's capabilities.",
+			"description": "The whole instance: a sign-out of everyone and a role's capabilities.",
 			"name": "Instance"
 		},
 		{

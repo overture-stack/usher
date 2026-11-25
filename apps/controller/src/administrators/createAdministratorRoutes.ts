@@ -175,9 +175,9 @@ const nominationView = ({
  * Removing, `DELETE /admin/administrators/{subject}`, is for an administrator alone, and may name the caller
  * themself. The administrator named is one live administrator, else 404 `administratorNotFound` with the reason
  * `notAdministrator`, whether the subject is one never met or one met who is not an administrator. Usher keeps
- * at least one administrator, so removing the last is refused 409 `lastAdministrator`. The removal is written
- * as a row of its own, the administrator's row kept, and each pending nomination the removed administrator made
- * is revoked, each recorded as `admin.nominationRevocation` at warning. The removal is recorded as `admin.removal`
+ * at least one live administrator, one not revoked, so removing the last is refused 409 `lastAdministrator`. The
+ * removal is written as a row of its own, the administrator's row kept, and each pending nomination the removed
+ * administrator made is revoked, each recorded as `admin.nominationRevocation` at warning. The removal is recorded as `admin.removal`
  * at critical, with the count of nominations revoked, and answered 200 with the subject, the instant and the count.
  * A person removed may be nominated and accepted again.
  *
@@ -263,7 +263,7 @@ export const createAdministratorRoutes = (
 							if (!(await administrators.isAdministrator(principal.subject))) {
 								refuseWithin(PROBLEMS.administratorOnly);
 							}
-							if (await administrators.isAdministrator(nomineeSubject)) {
+							if ((await administrators.readAdministrator(nomineeSubject)) !== undefined) {
 								refuseWithin(ADMINISTRATOR_PROBLEMS.nomineeAlreadyAdministrator);
 							}
 							const existingUserId = await administrators.findPerson(nomineeSubject);
@@ -503,9 +503,10 @@ export const createAdministratorRoutes = (
 		run: async () => {
 			const administrators = await listAdministrators(store, databaseSchema, identityProviderIssuer);
 			return answered(200, {
-				administrators: administrators.map(({ acceptedAt, nominationId, subject }) => ({
+				administrators: administrators.map(({ acceptedAt, nominationId, revoked, subject }) => ({
 					acceptedAt: eventInstant(acceptedAt.getTime()),
 					nominationId,
+					revoked,
 					subject,
 				})),
 			});
@@ -543,7 +544,11 @@ export const createAdministratorRoutes = (
 								ADMINISTRATOR_PROBLEMS.administratorNotFound,
 								ADMINISTRATOR_REFUSAL_REASONS.notAdministrator,
 							);
-						if ((await administrators.countAdministrators()) <= 1) {
+						// A revoked administrator counts for nothing, so removing one never leaves Usher without a live one.
+						if (
+							(await administrators.isAdministrator(subject)) &&
+							(await administrators.countAdministrators()) <= 1
+						) {
 							refuseWithin(ADMINISTRATOR_PROBLEMS.lastAdministrator);
 						}
 						const removedBy =

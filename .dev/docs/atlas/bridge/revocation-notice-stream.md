@@ -9,7 +9,7 @@ reasoned.
 This note sets out how the Usher Bridge, the library each ushered application embeds, reads the
 Controller's revocation notice stream. The stream carries every notice that drops cached access: a
 principal's revocation or sign-out, a category change on a resource, a change to an audience's served
-set, a baseline change, and a global revocation.
+set, a baseline change, and a sign-out of everyone.
 
 ## Decisions
 

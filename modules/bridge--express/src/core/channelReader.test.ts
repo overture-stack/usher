@@ -61,7 +61,7 @@ suite('createChannelReader', () => {
 			PRINCIPAL,
 			CATEGORY,
 			{ cursor: 'c-44', kind: 'baseline', v: 1 },
-			{ cursor: 'c-45', kind: 'global', v: 1 },
+			{ cursor: 'c-45', kind: 'signOutEveryone', v: 1 },
 			{ cursor: 'c-46', kind: 'servedResources', v: 1 },
 		]) {
 			test(`reads a ${notice.kind} notice the controller minted`, async () => {
@@ -157,7 +157,7 @@ suite('createChannelReader', () => {
 		}
 
 		for (const [description, plaintext] of [
-			['carrying no v', { cursor: 'c-42', kind: 'global' }],
+			['carrying no v', { cursor: 'c-42', kind: 'signOutEveryone' }],
 			['that is a list', [PRINCIPAL]],
 			['that is null', new TextEncoder().encode('null')],
 			['of an unknown kind', { ...PRINCIPAL, kind: 'refresh' }],

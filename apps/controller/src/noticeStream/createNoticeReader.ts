@@ -69,7 +69,7 @@ const storedNotice = (row: NoticeRow): StoredNotice => {
 	if (row.kind === 'servedResources' && row.audience !== null) {
 		return { ...base, audience: row.audience, kind: 'servedResources' };
 	}
-	if (row.kind === 'baseline' || row.kind === 'global') {
+	if (row.kind === 'baseline' || row.kind === 'signOutEveryone') {
 		return { ...base, kind: row.kind };
 	}
 	throw new TypeError('a stored notice is of no kind the stream carries');
@@ -80,7 +80,7 @@ const storedNotice = (row: NoticeRow): StoredNotice => {
  * statement with the stream's epoch, its trim watermark, its head and the notice at the position, so
  * all of them come from one snapshot: notice writes are serialized, so no notice can later commit
  * below a position the snapshot shows committed. Read for an audience, a page holds every principal,
- * baseline and global notice, the servedResources notices naming that audience, and the category
+ * baseline and signOutEveryone notice, the servedResources notices naming that audience, and the category
  * notices naming a resource the audience serves as the page is read; each category notice carries the
  * applications serving its resource then. A page holds at most its limit, and says whether more wait.
  *
@@ -108,7 +108,7 @@ export const createNoticeReader = (store: NoticeStore, schema: string): NoticeRe
         FROM ${table('notices')} notice
        WHERE notice.position > $1::bigint
          AND ($3::uuid IS NULL
-           OR notice.kind IN ('baseline', 'global', 'principal')
+           OR notice.kind IN ('baseline', 'signOutEveryone', 'principal')
            OR (notice.kind = 'servedResources' AND notice.audience = $3::uuid)
            OR (notice.kind = 'category' AND EXISTS (
                 SELECT 1 FROM ${table('application_resources')} served

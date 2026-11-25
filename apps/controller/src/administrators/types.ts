@@ -64,6 +64,13 @@ export interface ListedAdministrator {
 	/** The nomination the administrator accepted. */
 	nominationId: string;
 
+	/**
+	 * Whether the administrator's person holds a standing principal revocation, so they act as no
+	 * administrator until it is lifted, though they are listed so another administrator can lift or
+	 * remove them.
+	 */
+	revoked: boolean;
+
 	/** The administrator's subject under the trusted issuer. */
 	subject: string;
 }

@@ -747,7 +747,7 @@ export const revocationRow = ({
 }): Row => ({
 	[principalRevocations.columns.liftedAt]: lifted?.at ?? null,
 	[principalRevocations.columns.liftedBy]: lifted?.by ?? null,
-	[principalRevocations.columns.reason]: 'account reported compromised',
+	[principalRevocations.columns.reason]: 'credentialCompromise',
 	[principalRevocations.columns.revokedAt]: revokedAt,
 	[principalRevocations.columns.revokedBy]: revokedBy,
 	[principalRevocations.columns.userId]: userId,
@@ -936,10 +936,10 @@ export const BASELINE_NOTICE: NoticeContent = Object.freeze({
 	kind: 'baseline',
 });
 
-/** A global notice's content. */
-export const GLOBAL_NOTICE: NoticeContent = Object.freeze({
+/** A signOutEveryone notice's content. */
+export const SIGN_OUT_EVERYONE_NOTICE: NoticeContent = Object.freeze({
 	...nothingNamed,
-	kind: 'global',
+	kind: 'signOutEveryone',
 });
 
 /**
@@ -1573,7 +1573,7 @@ export const recordedChangeKits = (seeded: SeededPolicy): readonly RecordedChang
 				[user('cy')],
 			),
 			insert: statement(
-				`INSERT INTO ${qualified(principalRevocations)} (${principalRevocations.columns.reason}, ${principalRevocations.columns.revokedAt}, ${principalRevocations.columns.revokedBy}, ${principalRevocations.columns.userId}) VALUES ('account reported compromised', now(), $1, $2)`,
+				`INSERT INTO ${qualified(principalRevocations)} (${principalRevocations.columns.reason}, ${principalRevocations.columns.revokedAt}, ${principalRevocations.columns.revokedBy}, ${principalRevocations.columns.userId}) VALUES ('credentialCompromise', now(), $1, $2)`,
 				[steward, user('cy')],
 			),
 			prepare: [],

@@ -11,8 +11,9 @@ const ISSUER = 'https://auth.example.org/realms/usher';
 const ISSUED_AT = Math.floor(Date.UTC(2026, 10, 4, 12, 0, 0) / 1000);
 
 interface Standing {
+	liftedSince: boolean;
 	revoked: boolean;
-	revokedPlatform: boolean;
+	signedOutEveryone: boolean;
 	signedOut: boolean;
 }
 
@@ -22,8 +23,9 @@ interface Asked {
 }
 
 const STANDING_NONE: Standing = Object.freeze({
+	liftedSince: false,
 	revoked: false,
-	revokedPlatform: false,
+	signedOutEveryone: false,
 	signedOut: false,
 });
 
@@ -44,9 +46,9 @@ const SESSION = Object.freeze({ issuedAt: ISSUED_AT, sid: 'session-1' });
 suite("reading a principal's standing in the store", () => {
 	test('refuses for a standing revocation of the person first, then a revocation of the platform, then a sign-out, and not at all for none', async () => {
 		const standings: readonly Standing[] = [
-			{ revoked: true, revokedPlatform: true, signedOut: true },
-			{ revoked: false, revokedPlatform: true, signedOut: true },
-			{ revoked: false, revokedPlatform: false, signedOut: true },
+			{ liftedSince: false, revoked: true, signedOutEveryone: true, signedOut: true },
+			{ liftedSince: false, revoked: false, signedOutEveryone: true, signedOut: true },
+			{ liftedSince: false, revoked: false, signedOutEveryone: false, signedOut: true },
 			STANDING_NONE,
 		];
 
@@ -60,7 +62,7 @@ suite("reading a principal's standing in the store", () => {
 			),
 		);
 
-		assert.deepEqual(refusals, ['revokedPrincipal', 'revokedPlatform', 'signedOutSession', undefined]);
+		assert.deepEqual(refusals, ['revokedPrincipal', 'signedOutEveryone', 'signedOutSession', undefined]);
 	});
 
 	test("binds the issuer, the subject, the session and the token's iat as an instant, and none for a token naming no iat or sid", async () => {
@@ -86,7 +88,7 @@ suite("reading a principal's standing in the store", () => {
 		);
 	});
 
-	test('reads the platform revocations in the schema named, quoted as an identifier', async () => {
+	test('reads the sign-outs of everyone in the schema named, quoted as an identifier', async () => {
 		const { asked, store } = answering(STANDING_NONE);
 
 		await readStoredRefusal(store, 'usher "staging"', {
@@ -95,6 +97,6 @@ suite("reading a principal's standing in the store", () => {
 			subject: 'subject-ana',
 		});
 
-		assert.match(asked[0]?.text ?? '', /"usher ""staging"""\.global_revocations/u);
+		assert.match(asked[0]?.text ?? '', /"usher ""staging"""\.everyone_sign_outs/u);
 	});
 });

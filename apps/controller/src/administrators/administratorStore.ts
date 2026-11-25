@@ -44,6 +44,13 @@ const notRemoved = (schema: string, alias: string): string =>
 	`NOT EXISTS (SELECT 1 FROM ${tableIn(schema)('administrator_removals')} removal
                   WHERE removal.nomination_id = ${alias}.nomination_id)`;
 
+// A live administrator: one whose row no removal ends, and whose person holds no standing revocation, as `alias`
+// names the row. A revoked administrator acts as no administrator, though their row stays until removed.
+const liveAdministrator = (schema: string, alias: string): string =>
+	`${notRemoved(schema, alias)}
+     AND NOT EXISTS (SELECT 1 FROM ${tableIn(schema)('principal_revocations')} revocation
+                      WHERE revocation.user_id = ${alias}.user_id AND revocation.lifted_at IS NULL)`;
+
 // A nomination's state, as the answers joined by answersOf and the later nominations give it, in the
 // order the state is derived. A later nomination replaces one only when the nomination was made before
 // the first acceptance, so a nomination made once an administrator has accepted stays pending.
@@ -84,7 +91,7 @@ export const readAdministratorStatus = async (
               SELECT 1 FROM ${table('administrators')} held
                 JOIN ${table('user_identities')} identity ON identity.user_id = held.user_id
                WHERE identity.idp_issuer = $1 AND identity.idp_subject_id = $2
-                 AND ${notRemoved(schema, 'held')}
+                 AND ${liveAdministrator(schema, 'held')}
             ) AS administrator,
             EXISTS (SELECT 1 FROM ${table('administrators')} held WHERE ${notRemoved(schema, 'held')}) AS "anyAdministrator"`,
 		[issuer, subject],
@@ -125,8 +132,8 @@ export const listNominations = async (
 };
 
 /**
- * Lists the live administrators, the oldest acceptance first, each by subject, its instant of acceptance
- * and the nomination accepted.
+ * Lists the administrators whom no removal has ended, the oldest acceptance first, each by subject, its
+ * instant of acceptance, the nomination accepted, and whether their person holds a standing revocation.
  *
  * @param store the store reader.
  * @param schema the Controller's schema.
@@ -140,7 +147,9 @@ export const listAdministrators = async (
 	const { rows } = await store.query<ListedAdministrator>(
 		`SELECT ${subjectOf(schema, 'held.user_id')} AS subject,
             held.accepted_at AS "acceptedAt",
-            held.nomination_id::text AS "nominationId"
+            held.nomination_id::text AS "nominationId",
+            EXISTS (SELECT 1 FROM ${tableIn(schema)('principal_revocations')} revocation
+                     WHERE revocation.user_id = held.user_id AND revocation.lifted_at IS NULL) AS revoked
        FROM ${tableIn(schema)('administrators')} held
       WHERE ${notRemoved(schema, 'held')}
       ORDER BY held.accepted_at, held.nomination_id`,
@@ -239,7 +248,7 @@ export const sqlAdministratorStore = (
 			(
 				await connection.query<{ count: number }>(
 					`SELECT count(*)::int AS count FROM ${table('administrators')} held
-                    WHERE ${notRemoved(schema, 'held')}`,
+                    WHERE ${liveAdministrator(schema, 'held')}`,
 				)
 			).rows[0]?.count ?? 0,
 		declineNomination: async ({ nominationId, now }) => {
@@ -270,7 +279,7 @@ export const sqlAdministratorStore = (
 					`SELECT EXISTS (SELECT 1 FROM ${table('administrators')} held
                       JOIN ${table('user_identities')} identity ON identity.user_id = held.user_id
                      WHERE identity.idp_issuer = $1 AND identity.idp_subject_id = $2
-                       AND ${notRemoved(schema, 'held')}) AS "isAdministrator"`,
+                       AND ${liveAdministrator(schema, 'held')}) AS "isAdministrator"`,
 					[issuer, subject],
 				)
 			).rows[0]?.isAdministrator === true,

@@ -363,6 +363,7 @@ const standUp = (context: TestContext, world: Partial<World> = {}): Stand => {
 								.map(([subject, entry]) => ({
 									acceptedAt: entry.acceptedAt,
 									nominationId: entry.nominationId,
+									revoked: false,
 									subject,
 								}))
 								.sort((earlier, later) => earlier.acceptedAt.getTime() - later.acceptedAt.getTime())
@@ -1131,7 +1132,7 @@ suite('nominating and revoking once an administrator has accepted', () => {
 			'lockAdministrators',
 			'administratorExists',
 			'isAdministrator',
-			'isAdministrator',
+			'readAdministrator',
 			'findPerson',
 			'findOrRecordPerson',
 			'findOrRecordPerson',
@@ -1280,11 +1281,13 @@ suite('the administrators, listed and removed', () => {
 				{
 					acceptedAt: ANA_ADMINISTERS_SINCE.acceptedAt.toISOString(),
 					nominationId: ACCEPTED_BY_ANA,
+					revoked: false,
 					subject: 'subject-ana',
 				},
 				{
 					acceptedAt: CY_ADMINISTERS_SINCE.acceptedAt.toISOString(),
 					nominationId: ACCEPTED_BY_CY,
+					revoked: false,
 					subject: 'subject-cy',
 				},
 			],

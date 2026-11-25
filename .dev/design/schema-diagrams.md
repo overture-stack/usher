@@ -296,10 +296,10 @@ erDiagram
     uuid lifted_by FK "nullable"
     timestamptz lifted_at "nullable"
   }
-  global_revocations {
+  everyone_sign_outs {
     uuid id PK
-    uuid revoked_by FK
-    timestamptz revoked_at
+    uuid signed_out_by FK
+    timestamptz signed_out_at
     text reason_code
   }
   sid_sign_outs {
@@ -324,7 +324,7 @@ erDiagram
   users |o--o{ principal_revocations : "lifted_by"
   users ||--o{ principal_revocations : "revoked_by"
   users ||--o{ principal_revocations : "user_id"
-  users ||--o{ global_revocations : "revoked_by"
+  users ||--o{ everyone_sign_outs : "signed_out_by"
 ```
 
 ## The notice stream

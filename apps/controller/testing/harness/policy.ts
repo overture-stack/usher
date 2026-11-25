@@ -68,8 +68,8 @@ export const BEGIN_UNDER_SAVEPOINT = `BEGIN; SAVEPOINT ${WORK_SAVEPOINT}`;
  * - `exchanged_sids`: each `sid` a sign-in exchange carried, with its issuer, subject and the sign-in
  *   token's expiry, kept no longer than that token's life, so a logout naming only the `sid` reaches
  *   its subject (R7, option a).
- * - `global_revocations`: who revoked globally, when, and a fixed reason code; its insert writes the
- *   global notice and raises the policy generation in its transaction.
+ * - `everyone_sign_outs`: each sign-out of everyone, who recorded it, when, and a fixed reason code; its
+ *   insert writes the signOutEveryone notice and raises the policy generation in its transaction.
  * - `nominations` and `administrators`: each nomination of a person to be an administrator, kept as
  *   written, its `nominated_at` later than every nomination's before it, and each administrator, by
  *   the nomination they accepted (ruled).
@@ -198,6 +198,15 @@ export const POLICY_TABLES = {
 		},
 		name: 'change_records',
 	},
+	everyoneSignOuts: {
+		columns: {
+			id: 'id',
+			reasonCode: 'reason_code',
+			signedOutAt: 'signed_out_at',
+			signedOutBy: 'signed_out_by',
+		},
+		name: 'everyone_sign_outs',
+	},
 	exchangedSids: {
 		columns: {
 			expiresAt: 'expires_at',
@@ -206,15 +215,6 @@ export const POLICY_TABLES = {
 			sid: 'sid',
 		},
 		name: 'exchanged_sids',
-	},
-	globalRevocations: {
-		columns: {
-			id: 'id',
-			reasonCode: 'reason_code',
-			revokedAt: 'revoked_at',
-			revokedBy: 'revoked_by',
-		},
-		name: 'global_revocations',
 	},
 	grantDecisions: {
 		columns: {
@@ -618,7 +618,13 @@ export const GRANT_OPERATIONS = Object.freeze({
 export const DECISION_ORIGIN_COLUMN = 'origin';
 
 /** The notice kinds, spelled as on the wire. */
-export const NOTICE_KINDS = Object.freeze(['baseline', 'category', 'global', 'principal', 'servedResources'] as const);
+export const NOTICE_KINDS = Object.freeze([
+	'baseline',
+	'category',
+	'principal',
+	'servedResources',
+	'signOutEveryone',
+] as const);
 
 /** The kind of the outbox row that tells a resource's owners of a self-grant on it (#212 Q13). */
 export const SELF_GRANT_NOTIFICATION = 'selfGrant';
@@ -2006,11 +2012,7 @@ export const retireInStore = (
  */
 export const revokePrincipalInStore = async (
 	client: pg.ClientBase,
-	{
-		reason = 'synthetic revocation for a test',
-		revokedBy,
-		userId,
-	}: { reason?: string; revokedBy: string; userId: string },
+	{ reason = 'credentialCompromise', revokedBy, userId }: { reason?: string; revokedBy: string; userId: string },
 ): Promise<void> => {
 	await inTransactionAs(client, SYSTEM_ACTOR, () =>
 		insertRow(client, principalRevocations, {

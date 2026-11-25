@@ -89,7 +89,7 @@ const EXCHANGE_FAILURE_CAUSES = ['assertionRefused', 'defect', 'network', 'statu
 const TALLIED_EXCHANGE_FAILURE_CAUSES = ['admissionShareExceeded', 'backedOff', 'overloaded', 'retryAfter'] as const;
 
 const MALFORMED_CREDENTIAL_REASONS = ['multiple', 'query', 'scheme'] as const;
-const NOTICE_KINDS = ['baseline', 'category', 'global', 'principal', 'servedResources'] as const;
+const NOTICE_KINDS = ['baseline', 'category', 'principal', 'servedResources', 'signOutEveryone'] as const;
 const OVERTAKEN_OUTCOMES = ['abandoned', 'exchangedAgain', 'servedOpenTier'] as const;
 const REFUSAL_ORIGINS = ['cachedRefusal', 'controller', 'localExpiry'] as const;
 const UNENFORCED_ENTRIES = ['fieldPartition'] as const;

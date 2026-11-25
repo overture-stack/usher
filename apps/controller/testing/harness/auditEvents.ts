@@ -50,6 +50,7 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 	identityRevocation: 'identity.revocation',
 	identityRevocationLift: 'identity.revocationLift',
 	identitySignOut: 'identity.signOut',
+	identitySignOutEveryone: 'identity.signOutEveryone',
 	invitationClaim: 'invitation.claim',
 	invitationCreation: 'invitation.creation',
 	invitationLapse: 'invitation.lapse',
@@ -59,7 +60,6 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 	managementTokenRefusalTally: 'managementToken.refusalTally',
 	importRun: 'import.run',
 	ownershipTransfer: 'ownership.transfer',
-	platformRevocation: 'platform.revocation',
 	resourceDeletion: 'resource.deletion',
 	resourceDetailsUpdate: 'resource.detailsUpdate',
 	resourceOrphaned: 'resource.orphaned',
@@ -813,7 +813,7 @@ export const TOKEN_CAP_EVENT = Object.freeze({
  * session's length, and the exchange and the Management API name it alike. One naming no `iat` is
  * `missingIssuedAt`, and one whose `exp` falls more than the configured maximum lifetime after its
  * `iat` is `excessiveLifetime`, at both (ruled), each judged after the `exp` and before any standing
- * is read. A token issued before a platform revocation is `revokedPlatform` at both. A `credential`
+ * is read. A token issued before a sign-out of everyone is `signedOutEveryone` at both. A `credential`
  * holding empty text is `missingCredential`. A token not marked as an access token by its identity provider's
  * connector is `otherType`, one naming no `sub` is `missingSubject`, and one whose `sub` or `sid`
  * holds text that cannot be stored is `unrepresentableSubject`, each read from the token's contents
@@ -834,9 +834,9 @@ export const EXCHANGE_REFUSAL_REASONS = Object.freeze({
 	otherAudience: 'otherAudience',
 	otherIssuer: 'otherIssuer',
 	otherType: 'otherType',
-	revokedPlatform: 'revokedPlatform',
 	revokedPrincipal: 'revokedPrincipal',
 	serviceAccountNotPermitted: 'serviceAccountNotPermitted',
+	signedOutEveryone: 'signedOutEveryone',
 	signedOutSession: 'signedOutSession',
 	signingKeyUnconfirmed: 'signingKeyUnconfirmed',
 	unreadableToken: 'unreadableToken',
@@ -859,8 +859,8 @@ export const MANAGEMENT_TOKEN_REFUSAL_REASONS: readonly string[] = Object.freeze
 	EXCHANGE_REFUSAL_REASONS.notYetValid,
 	EXCHANGE_REFUSAL_REASONS.otherAudience,
 	EXCHANGE_REFUSAL_REASONS.otherType,
-	EXCHANGE_REFUSAL_REASONS.revokedPlatform,
 	EXCHANGE_REFUSAL_REASONS.revokedPrincipal,
+	EXCHANGE_REFUSAL_REASONS.signedOutEveryone,
 	EXCHANGE_REFUSAL_REASONS.signedOutSession,
 	EXCHANGE_REFUSAL_REASONS.unrepresentableSubject,
 ]);
@@ -886,9 +886,9 @@ export const UNVERIFIED_MANAGEMENT_CREDENTIAL_REASONS: readonly string[] = Objec
  * {@link REFUSED_SUBJECT_MAXIMUM_LENGTH} characters whole, and is left out for a longer one, never
  * truncated. Within that length, a `managementToken.refusal` carries it for `excessiveLifetime`,
  * `expiredToken`, `missingExpiry`, `missingIssuedAt`, `notYetValid`, `otherAudience`, `otherType`,
- * `revokedPlatform`, `revokedPrincipal` and `signedOutSession`, and a refused `token.exchange` for
+ * `revokedPrincipal`, `signedOutEveryone` and `signedOutSession`, and a refused `token.exchange` for
  * `excessiveLifetime`, `expiredToken`, `missingExpiry`, `missingIssuedAt`, `notYetValid`,
- * `otherAudience`, `revokedPlatform`, `revokedPrincipal`, `signedOutSession` and
+ * `otherAudience`, `revokedPrincipal`, `signedOutEveryone`, `signedOutSession` and
  * `serviceAccountNotPermitted` alone, once the token's signature verifies. Neither carries it for
  * `missingSubject` or `unrepresentableSubject`, and `otherType` names it at the Management API alone.
  * A refusal of a credential whose signature does not verify (`unreadableToken`, `otherIssuer`,

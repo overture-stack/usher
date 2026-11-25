@@ -75,7 +75,7 @@ const pages =
 const NOTICES = Object.freeze([
 	{ cursor: 'c-1', kind: 'baseline', v: 1 },
 	{ cursor: 'c-2', kind: 'category', resource: 'STUDY-A1', v: 1 },
-	{ cursor: 'c-3', kind: 'global', v: 1 },
+	{ cursor: 'c-3', kind: 'signOutEveryone', v: 1 },
 ]);
 
 const writes =
@@ -304,7 +304,7 @@ suite('the stream client', () => {
 	});
 
 	test('reads a notice the bridge would refuse as the bridge reads it', async (context) => {
-		const versionTwo = await noticeJwe({ cursor: 'c-1', kind: 'global', v: 2 });
+		const versionTwo = await noticeJwe({ cursor: 'c-1', kind: 'signOutEveryone', v: 2 });
 		const server = await recording(
 			context,
 			writes([`id: c-1\nevent: notice\ndata: ${versionTwo}\n\n`, 'event: notice\ndata: not a jwe\n\n'], {}),

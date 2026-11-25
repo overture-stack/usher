@@ -148,8 +148,13 @@ identity provider. Usher never caches admin status between requests, so a change
 from the next request.
 
 Admin status is read inside each change's own transaction as well, so a change by a removed admin
-never commits. A change that alters who is an admin holds the admins lock exclusively, and every other
-change by an admin holds it shared, so the two never interleave.
+never commits.
+
+A revoked admin acts as no admin. Admin status counts an admin only while their person holds no
+standing principal revocation, at admission and inside each change's transaction alike, and the
+admin's row stays until a removal ends it. A change that alters who is an admin, a revocation or a
+lift of one included, holds the admins lock exclusively, and every other change by an admin holds it
+shared, so the two never interleave.
 
 **Adversarial framing:** if an admin account is compromised, the attacker gains grant
 management power. But every action they take is logged, and they do not gain silent unlogged data
@@ -206,7 +211,8 @@ admin exists:
   The pending nomination must be withdrawn first.
 - Every admin is kept. Removing an admin writes a removal row of their own and never deletes the admin's
   row, so the nomination that made them stays on record.
-- An admin removes another admin, or themself, and the last admin is never removed.
+- An admin removes another admin, or themself, and the last live admin is never removed. A live admin
+  is one not revoked, so the last admin without a standing revocation can be neither removed nor revoked.
 - A removal revokes each nomination the removed admin made that is still pending.
 - A person removed may be nominated and accepted again, and then holds a new admin row of their own.
 

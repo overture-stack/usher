@@ -210,7 +210,7 @@ build those payloads themselves rather than the mock issuing them.
 
 ### Revocation and invalidation
 
-**One notice stream carries every kind**, pushed and polled alike: a principal's revocation, a category change, the baseline change, a global revocation and a sign-out. Each notice holds a position in one sequence the Controller issues. A pushed event carries it as its id, a reconnecting push resumes with `Last-Event-ID`, and the poll asks for the notices after a position rather than after a time, so neither clock skew nor a late-committing write loses one.
+**One notice stream carries every kind**, pushed and polled alike: a principal's revocation, a category change, the baseline change, a sign-out of everyone and a sign-out. Each notice holds a position in one sequence the Controller issues. A pushed event carries it as its id, a reconnecting push resumes with `Last-Event-ID`, and the poll asks for the notices after a position rather than after a time, so neither clock skew nor a late-committing write loses one.
 
 | Given                                      | Then                                                                                                     |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -219,7 +219,7 @@ build those payloads themselves rather than the mock issuing them.
 | a push reconnecting                        | it resumes from its last position and misses nothing                                                     |
 | a category change announced for a resource | every entry naming that resource dropped, the anonymous one included, and every other kept               |
 | a baseline-change notice                   | every entry dropped, the anonymous one included, since every payload carries the baseline; refusals kept |
-| a global revocation                        | every entry dropped, refusals included                                                                   |
+| a sign-out of everyone                     | every entry dropped, refusals included                                                                   |
 | a sign-out from the identity provider      | relayed by the Controller as a principal notice, so every Bridge drops that person's entries             |
 | a poll answered within its deadline        | a successful check, timed on the Bridge's own clock                                                      |
 | a poll not answered within its deadline    | aborted at the deadline, no check, and retried at once                                                   |

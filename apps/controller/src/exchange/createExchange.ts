@@ -367,7 +367,7 @@ const judgedCredentialOf = (
  * Any other sign-in token the judgement accepts is issued for, in one transaction declaring its
  * principal the actor, a person named by the identity provider's `sub`. Their standing is read first,
  * under the identity provider's issuer: a principal the store refuses, revoked, issued for before a
- * revocation of the whole platform, or signed out, is answered the same `403` and denied under that
+ * sign-out of everyone, or signed out, is answered the same `403` and denied under that
  * reason, naming the subject in `refusedSubject`, its actor anonymous, that transaction writing
  * nothing. A principal in good standing is met, a person recorded on first meeting them; the
  * audience's policy and the recorded grants reaching that person are read from one snapshot, and the

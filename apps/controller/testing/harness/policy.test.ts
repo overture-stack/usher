@@ -153,7 +153,7 @@ const FIXTURE: PolicyFixture = {
 	revocations: [
 		{
 			lifted: { at: new Date('2026-10-02T12:00:00Z') },
-			reason: 'compromised account',
+			reason: 'credentialCompromise',
 			revokedAt: new Date('2026-10-01T12:00:00Z'),
 			revokedBy: 'ana',
 			user: 'cy',
@@ -344,7 +344,7 @@ suite('seeding policy by SQL', () => {
 				{
 					id: seeded.revocations[0],
 					lifted_by: seeded.users[STEWARD],
-					reason: 'compromised account',
+					reason: 'credentialCompromise',
 					revoked_by: seeded.users['ana'],
 					user_id: seeded.users['cy'],
 				},
@@ -979,7 +979,7 @@ suite('changes by SQL that pass through no write path of the controller', () => 
 				`SELECT reason, lifted_at FROM ${qualified(POLICY_TABLES.principalRevocations)} WHERE user_id = $1`,
 				[anaId],
 			),
-			[{ lifted_at: null, reason: 'synthetic revocation for a test' }],
+			[{ lifted_at: null, reason: 'credentialCompromise' }],
 		);
 		assert.equal((await recorded()).length - before.length, 3);
 		assert.deepEqual([...new Set(await recorded())].toSorted(), [
@@ -1053,7 +1053,7 @@ suite('the notice stream, written and read straight in its tables', () => {
 
 	test('stands in for a trim, a new epoch and a restore', async (context) => {
 		const client = await ownerOfFreshDatabase(context);
-		await insertNotices(client, [{ kind: 'baseline' }, { kind: 'global' }, { kind: 'baseline' }]);
+		await insertNotices(client, [{ kind: 'baseline' }, { kind: 'signOutEveryone' }, { kind: 'baseline' }]);
 		const [first, second] = await noticePositions(client);
 		const before = await readNoticeStream(client);
 
@@ -1062,7 +1062,7 @@ suite('the notice stream, written and read straight in its tables', () => {
 		await setEpoch(client);
 		const renewed = await readNoticeStream(client);
 		await simulateRestore(client, { epoch: 'kept', keptThrough: second ?? 0n });
-		await insertNotices(client, [{ kind: 'global' }]);
+		await insertNotices(client, [{ kind: 'signOutEveryone' }]);
 
 		assert.equal(trimmed.trimmedThrough, first);
 		assert.equal(trimmed.epoch, before.epoch);
@@ -1086,7 +1086,7 @@ suite('the notice stream, written and read straight in its tables', () => {
 		await writing;
 		await hold.remove();
 		const refusal = await refuseNoticeWrites(scope, holder);
-		const refused = await insertNotices(holder, [{ kind: 'global' }]).then(
+		const refused = await insertNotices(holder, [{ kind: 'signOutEveryone' }]).then(
 			() => 'written',
 			(error: unknown) => (error instanceof Error ? error.message : 'refused'),
 		);
@@ -1108,7 +1108,7 @@ suite('the trimming function, called', () => {
 		const old = new Date(Date.now() - 3_600_000);
 		await insertNotices(client, [
 			{ createdAt: old, kind: 'baseline' },
-			{ createdAt: old, kind: 'global' },
+			{ createdAt: old, kind: 'signOutEveryone' },
 			{ kind: 'baseline' },
 		]);
 		const [, second] = await noticePositions(client);
@@ -1134,7 +1134,7 @@ suite('the trimming function, called', () => {
 		const old = new Date(Date.now() - 3_600_000);
 		await insertNotices(client, [
 			{ createdAt: old, kind: 'baseline' },
-			{ createdAt: old, kind: 'global' },
+			{ createdAt: old, kind: 'signOutEveryone' },
 			{ kind: 'baseline' },
 		]);
 		const [first] = await noticePositions(client);
@@ -1145,7 +1145,7 @@ suite('the trimming function, called', () => {
 		assert.equal((await readNoticeStream(client)).trimmedThrough, first);
 		assert.deepEqual(
 			(await noticesAfter(client)).map(({ kind }) => kind),
-			['global', 'baseline'],
+			['signOutEveryone', 'baseline'],
 		);
 	});
 });
@@ -1451,7 +1451,7 @@ suite('a snapshot of the store, and its restore', () => {
 		const client = await ownerOfFreshDatabase(context);
 		await seedPolicy(client, FIXTURE);
 		const seedingNotices = (await noticesAfter(client)).length;
-		await insertNotices(client, [{ kind: 'baseline' }, { kind: 'global' }]);
+		await insertNotices(client, [{ kind: 'baseline' }, { kind: 'signOutEveryone' }]);
 		const changesBefore = await changeRecordCount(client, resources);
 
 		const snapshot = await takeStoreSnapshot(client);
@@ -1480,7 +1480,7 @@ suite('a snapshot of the store, and its restore', () => {
 	test("puts back every row and every sequence over later changes, firing no trigger, and keeps the snapshot's epoch", async (context) => {
 		const client = await ownerOfFreshDatabase(context);
 		const seeded = await seedPolicy(client, FIXTURE);
-		await insertNotices(client, [{ kind: 'baseline' }, { kind: 'global' }]);
+		await insertNotices(client, [{ kind: 'baseline' }, { kind: 'signOutEveryone' }]);
 		const policyBefore = await policySnapshot(client);
 		const positionsBefore = await noticePositions(client);
 		const streamBefore = await readNoticeStream(client);
@@ -1493,13 +1493,13 @@ suite('a snapshot of the store, and its restore', () => {
 			grantId: seededId(seeded.grants, 'anaViews'),
 			revokedBy: seededId(seeded.users, STEWARD),
 		});
-		await insertNotices(client, [{ kind: 'global' }, { kind: 'baseline' }]);
+		await insertNotices(client, [{ kind: 'signOutEveryone' }, { kind: 'baseline' }]);
 		await setEpoch(client);
 		const policyChanged = await policySnapshot(client);
 
 		await restoreStoreSnapshot(client, snapshot);
 		const changesRestored = await changeRecordCount(client, resources);
-		await insertNotices(client, [{ kind: 'global' }]);
+		await insertNotices(client, [{ kind: 'signOutEveryone' }]);
 		await seedPolicy(client, {
 			resources: { 'STUDY-E5': { baseTier: 'open', name: 'E5' } },
 		});

@@ -335,7 +335,7 @@ suite('createPoll', () => {
 	});
 
 	suite('the cursors a check asks after', () => {
-		const GLOBAL = { cursor: 'c-44', kind: 'global', v: 1 } as const;
+		const SIGN_OUT_EVERYONE = { cursor: 'c-44', kind: 'signOutEveryone', v: 1 } as const;
 
 		interface ScriptedPage {
 			more: boolean;
@@ -402,7 +402,7 @@ suite('createPoll', () => {
 				{
 					'c-41': { more: true, next: 'c-42', notices: [PRINCIPAL] },
 					'c-42': { more: true, next: 'c-43', notices: [CATEGORY] },
-					'c-43': { more: true, next: 'c-42', notices: [GLOBAL] },
+					'c-43': { more: true, next: 'c-42', notices: [SIGN_OUT_EVERYONE] },
 				},
 				['c-41', 'c-42', 'c-43'],
 				[PRINCIPAL, CATEGORY],
@@ -434,7 +434,7 @@ suite('createPoll', () => {
 		test('follows every page whose next is a cursor its check has not asked after, recording one check', async () => {
 			const controller = scriptedController({
 				'c-41': { more: true, next: 'c-42', notices: [CATEGORY] },
-				'c-42': { more: false, next: 'c-44', notices: [GLOBAL] },
+				'c-42': { more: false, next: 'c-44', notices: [SIGN_OUT_EVERYONE] },
 				head: { more: true, next: 'c-41', notices: [PRINCIPAL] },
 			});
 			const { poll, recorded } = await pollWith(controller.fetch);
@@ -446,7 +446,7 @@ suite('createPoll', () => {
 				controller.requests.map(({ after }) => after),
 				[null, 'c-41', 'c-42'],
 			);
-			assert.deepEqual(recorded.applied, [PRINCIPAL, CATEGORY, GLOBAL]);
+			assert.deepEqual(recorded.applied, [PRINCIPAL, CATEGORY, SIGN_OUT_EVERYONE]);
 			assert.equal(poll.position(), 'c-44');
 			assert.deepEqual(recorded.confirmed, [0]);
 			assert.deepEqual(recorded.events, []);

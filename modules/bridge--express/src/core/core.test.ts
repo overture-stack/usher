@@ -1432,7 +1432,7 @@ suite('createBridgeCoreWithSeams', () => {
 			const refreshing = harness.core.refreshAnonymous();
 			await settled();
 
-			harness.core.applyNotice({ cursor: 'c-1', kind: 'global', v: 1 });
+			harness.core.applyNotice({ cursor: 'c-1', kind: 'signOutEveryone', v: 1 });
 			const stopping = harness.core.stop();
 			held.release();
 			const refreshed = await refreshing;
@@ -2693,12 +2693,12 @@ suite('createBridgeCoreWithSeams', () => {
 			});
 		}
 
-		test('fetches the anonymous payload first after a global drop, and answers 503 beyond the in-flight bound', async () => {
+		test('fetches the anonymous payload first after a signOutEveryone drop, and answers 503 beyond the in-flight bound', async () => {
 			const harness = await running();
 			const held = holdingExchanges(harness, 64);
 			const before = harness.exchanges.length;
 
-			harness.core.applyNotice({ cursor: 'c-1', kind: 'global', v: 1 });
+			harness.core.applyNotice({ cursor: 'c-1', kind: 'signOutEveryone', v: 1 });
 			const holding = held.credentials.map((credential) => harness.core.resolve(credential));
 			const beyond = await harness.core.resolve('uak_beyond');
 			held.release();
@@ -2728,12 +2728,12 @@ suite('createBridgeCoreWithSeams', () => {
 			await harness.core.stop();
 		});
 
-		test('drops refusals too on a global notice, so a refused credential is exchanged again', async () => {
+		test('drops refusals too on a signOutEveryone notice, so a refused credential is exchanged again', async () => {
 			const harness = await running();
 			const credential = signInToken({ sub: 'subject-revoked' });
 			await harness.core.resolve(credential);
 
-			harness.core.applyNotice({ cursor: 'c-1', kind: 'global', v: 1 });
+			harness.core.applyNotice({ cursor: 'c-1', kind: 'signOutEveryone', v: 1 });
 			await harness.core.resolve(credential);
 
 			assert.equal(harness.exchanges.filter((sent) => sent === credential).length, 2);
@@ -3205,7 +3205,7 @@ suite('createBridgeCoreWithSeams', () => {
 		test('logs abandoned when an anonymous fetch is discarded a second time, installing nothing', async () => {
 			const harness = await running();
 			harness.answers.set(null, () => {
-				harness.core.applyNotice({ cursor: 'c', kind: 'global', v: 1 });
+				harness.core.applyNotice({ cursor: 'c', kind: 'signOutEveryone', v: 1 });
 				return Promise.resolve({ kind: 'token', token: 'token:anonymous' });
 			});
 

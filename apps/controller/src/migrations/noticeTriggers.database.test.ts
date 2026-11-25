@@ -14,7 +14,7 @@ import {
 	decisionRow,
 	distinctContents,
 	globalCategoryRow,
-	GLOBAL_NOTICE,
+	SIGN_OUT_EVERYONE_NOTICE,
 	grantRow,
 	insertRow,
 	type NoticeContent,
@@ -45,7 +45,7 @@ import {
 const {
 	applicationResources,
 	categories,
-	globalRevocations,
+	everyoneSignOuts,
 	grantDecisions,
 	grants,
 	groupUsers,
@@ -389,23 +389,23 @@ suite('the notices each change writes', () => {
 		]);
 	});
 
-	test('writes a global notice, raises the policy generation and records the change when a global revocation is recorded, all in its transaction', async (context) => {
+	test('writes a signOutEveryone notice, raises the policy generation and records the change when a sign-out of everyone is recorded, all in its transaction', async (context) => {
 		const { database, seeded } = await openSeededDatabase(context);
 		const administrator: Actor = { id: STEWARD_SUBJECT, type: 'human' };
 
 		const revoked = await observeChange(
 			database,
 			(client) =>
-				insertRow(client, globalRevocations, {
-					[globalRevocations.columns.reasonCode]: 'securityIncident',
-					[globalRevocations.columns.revokedAt]: new Date(),
-					[globalRevocations.columns.revokedBy]: stewardOf(seeded),
+				insertRow(client, everyoneSignOuts, {
+					[everyoneSignOuts.columns.reasonCode]: 'securityIncident',
+					[everyoneSignOuts.columns.signedOutAt]: new Date(),
+					[everyoneSignOuts.columns.signedOutBy]: stewardOf(seeded),
 				}),
 			{ actor: administrator },
 		);
 
 		const { before, committed, insideTransaction } = revoked;
-		assertWrittenWithChange(revoked, [GLOBAL_NOTICE]);
+		assertWrittenWithChange(revoked, [SIGN_OUT_EVERYONE_NOTICE]);
 		assert.equal(
 			before.generation !== undefined &&
 				insideTransaction.generation !== undefined &&
@@ -416,8 +416,8 @@ suite('the notices each change writes', () => {
 			committed.changeRecords.map(({ actorId, actorType, newRow, oldRow, tableName }) => ({
 				actorId,
 				actorType,
-				reasonCode: newRow?.[globalRevocations.columns.reasonCode],
-				revokedBy: newRow?.[globalRevocations.columns.revokedBy],
+				reasonCode: newRow?.[everyoneSignOuts.columns.reasonCode],
+				revokedBy: newRow?.[everyoneSignOuts.columns.signedOutBy],
 				tableName,
 				valuesBefore: oldRow,
 			})),
@@ -427,7 +427,7 @@ suite('the notices each change writes', () => {
 					actorType: 'human',
 					reasonCode: 'securityIncident',
 					revokedBy: stewardOf(seeded),
-					tableName: globalRevocations.name,
+					tableName: everyoneSignOuts.name,
 					valuesBefore: null,
 				},
 			],

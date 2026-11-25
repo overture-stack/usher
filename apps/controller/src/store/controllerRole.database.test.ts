@@ -27,7 +27,7 @@ const { auditLog, changeRecords, grantDecisions, grants, notices, principalRevoc
 
 const WITH_A_STANDING_REVOCATION: PolicyFixture = {
 	...BASE_FIXTURE,
-	revocations: [{ reason: 'account reported compromised', user: 'cy' }],
+	revocations: [{ reason: 'credentialCompromise', user: 'cy' }],
 };
 
 const privilegesOfEveryTable = (client: pg.ClientBase): Promise<readonly { acl: string | null; name: string }[]> =>
@@ -78,7 +78,7 @@ suite("the controller's database role", () => {
 			[
 				`UPDATE ${qualified(grantDecisions)} SET ${grantDecisions.columns.decision} = 'accepted'`,
 				`DELETE FROM ${qualified(grantDecisions)}`,
-				`UPDATE ${qualified(notices)} SET ${notices.columns.kind} = 'global'`,
+				`UPDATE ${qualified(notices)} SET ${notices.columns.kind} = 'signOutEveryone'`,
 				`DELETE FROM ${qualified(notices)}`,
 				`UPDATE ${qualified(auditLog)} SET ${auditLog.columns.type} = 'org.overture.usher.grant.revoke'`,
 				`DELETE FROM ${qualified(auditLog)}`,
@@ -169,7 +169,7 @@ suite("the controller's database role", () => {
 			[
 				{
 					liftedBy: stewardOf(seeded),
-					reason: 'account reported compromised',
+					reason: 'credentialCompromise',
 					userId: seededId(seeded.users, 'cy'),
 				},
 			],

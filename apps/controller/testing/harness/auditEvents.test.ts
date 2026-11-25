@@ -751,7 +751,7 @@ suite("the controller's events, as the document registers them", () => {
 			],
 		);
 	});
-	test("reads each event's severity as its row names it: a lift of an identity's revocation at warning, a revocation of the whole platform or of a resource at critical", () => {
+	test("reads each event's severity as its row names it: a lift of an identity's revocation, a sign-out of everyone and a revocation of a resource, at critical", () => {
 		const levels = (
 			[
 				'application.registration',
@@ -763,7 +763,7 @@ suite("the controller's events, as the document registers them", () => {
 				'category.creation',
 				'grant.decision',
 				'identity.revocationLift',
-				'platform.revocation',
+				'identity.signOutEveryone',
 				'resource.deletion',
 				'resource.detailsUpdate',
 				'resource.retirement',
@@ -783,8 +783,8 @@ suite("the controller's events, as the document registers them", () => {
 			'audit.read': 'info',
 			'category.creation': 'warning',
 			'grant.decision': 'info',
-			'identity.revocationLift': 'warning',
-			'platform.revocation': 'critical',
+			'identity.revocationLift': 'critical',
+			'identity.signOutEveryone': 'critical',
 			'resource.deletion': 'info',
 			'resource.detailsUpdate': 'info',
 			'resource.retirement': 'info',
@@ -906,9 +906,9 @@ suite("the controller's events, as the document registers them", () => {
 			'otherAudience',
 			'otherIssuer',
 			'otherType',
-			'revokedPlatform',
 			'revokedPrincipal',
 			'serviceAccountNotPermitted',
+			'signedOutEveryone',
 			'signedOutSession',
 			'signingKeyUnconfirmed',
 			'unreadableToken',

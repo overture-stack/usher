@@ -11,6 +11,7 @@ import {
 	sqlAdministratorStore,
 } from '../administrators/index.js';
 import { createCategoryRoutes, sqlCategoryStore } from '../categories/index.js';
+import { createRevocationRoutes, sqlRevocationStore } from '../revocations/index.js';
 import {
 	createAdmission,
 	SHARE_EXCEEDED_TALLY_INTERVAL_MILLISECONDS,
@@ -432,6 +433,20 @@ export const createController = (configuration: ControllerConfiguration): Contro
 		...createCategoryRoutes(
 			{
 				categoryStoreOf: (connection) => sqlCategoryStore(connection, configuration.databaseSchema),
+				settings,
+				store: reader,
+				trail: wakingTrail,
+			},
+			management,
+		),
+		...createRevocationRoutes(
+			{
+				administratorStoreOf: (connection) =>
+					sqlAdministratorStore(connection, {
+						issuer: configuration.identityProviderIssuer,
+						schema: configuration.databaseSchema,
+					}),
+				revocationStoreOf: (connection) => sqlRevocationStore(connection, configuration.databaseSchema),
 				settings,
 				store: reader,
 				trail: wakingTrail,

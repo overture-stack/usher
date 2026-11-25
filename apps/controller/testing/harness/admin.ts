@@ -265,7 +265,7 @@ const PATHS = {
 	categories: 'admin/categories',
 	category: (scopedName: string): string => `admin/categories/${segment(scopedName)}`,
 	egoImport: 'admin/imports/ego',
-	globalRevocation: 'admin/revocations/global',
+	signOutEveryone: 'admin/sign-outs',
 	grant: (grantId: string): string => `admin/grants/${segment(grantId)}`,
 	grantDecisions: (grantId: string): string => `admin/grants/${segment(grantId)}/decisions`,
 	grantRequestDecisions: (grantRequestId: string): string =>
@@ -345,7 +345,7 @@ export const MANAGEMENT_ROUTES: readonly ManagementRoute[] = Object.freeze([
 	...routes('/admin/resources/{externalId}/revocations', ['POST']),
 	...routes('/admin/resources/{externalId}/submitters/removal', ['POST']),
 	...routes('/admin/resources/{externalId}/suppression', ['POST']),
-	...routes('/admin/revocations/global', ['POST']),
+	...routes('/admin/sign-outs', ['POST']),
 	...routes('/admin/roles/{roleName}/capabilities', ['PUT']),
 	...routes('/admin/settings', ['GET', 'PATCH']),
 	...routes('/admin/settings/grant-rules', ['GET', 'PUT']),
@@ -1240,23 +1240,23 @@ export const revokeResourceUsers = (
 	);
 
 /**
- * Revokes globally, confirmed in the request (#210 Q1): `POST /admin/revocations/global`.
+ * Signs out everyone, confirmed in the request (#210 Q1): `POST /admin/sign-outs`.
  *
  * @param caller the Controller and the caller's token.
- * @param revocation the reason.
+ * @param signOut the reason.
  * @param overrides departures from the request, such as a body without the confirmation.
  */
-export const revokeGlobally = (
+export const signOutEveryone = (
 	caller: AdminCaller,
-	revocation: { reason: string },
+	signOut: { reason: string },
 	overrides?: AdminOverrides,
 ): Promise<AdminResponse> =>
 	send(
 		caller,
 		{
-			json: { confirm: true, ...revocation },
+			json: { confirm: true, ...signOut },
 			method: 'POST',
-			path: PATHS.globalRevocation,
+			path: PATHS.signOutEveryone,
 		},
 		overrides,
 	);
@@ -1622,7 +1622,10 @@ const problem = <Code extends string, Status extends number>(
  *   text saying to retire it instead; `unknownApplication`, an unregistered application in a
  *   registration's body, the whole registration refused, or in an EGO import's `audiences`;
  *   `importNeedsAnAudience`, an EGO import whose `audiences` is empty (ruled);
- *   `ownerGrantsDoNotExpire`, an owner grant given an expiry. Other 422s carry no code the rulings
+ *   `ownerGrantsDoNotExpire`, an owner grant given an expiry; `invalidRevocationReason`, a principal
+ *   revocation's reason outside the identity revocation reasons; `invalidSignOutReason`, a
+ *   sign-out of everyone's reason outside the sign-out reasons; `notConfirmed`, a sign-out of
+ *   everyone whose `confirm` is other than `true`. Other 422s carry no code the rulings
  *   name.
  * - 503: `directoryNotConfigured`, an address operation on an instance with no directory, with no
  *   `Retry-After`; `directoryUnavailable`, an address operation the directory cannot answer;
@@ -1639,6 +1642,7 @@ export const PROBLEMS = Object.freeze({
 	alreadyExists: problem('alreadyExists', 409),
 	alreadyHolds: problem('alreadyHolds', 409),
 	alreadyRequested: problem('alreadyRequested', 409),
+	alreadyRevoked: problem('alreadyRevoked', 409),
 	applicationKeyLimit: problem('applicationKeyLimit', 409),
 	applicationKeyNotFound: problem('applicationKeyNotFound', 404),
 	applicationNotFound: problem('applicationNotFound', 404),
@@ -1652,6 +1656,8 @@ export const PROBLEMS = Object.freeze({
 	holderNotFound: problem('holderNotFound', 404),
 	importInProgress: problem('importInProgress', 409),
 	importNeedsAnAudience: problem('importNeedsAnAudience', 422),
+	invalidSignOutReason: problem('invalidSignOutReason', 422),
+	invalidRevocationReason: problem('invalidRevocationReason', 422),
 	importNotConfigured: problem('importNotConfigured', 503),
 	noAdministratorYet: problem('noAdministratorYet', 403),
 	noAuthorityOnResource: problem('noAuthorityOnResource', 403),
@@ -1663,7 +1669,9 @@ export const PROBLEMS = Object.freeze({
 	nomineeAlreadyAdministrator: problem('nomineeAlreadyAdministrator', 409),
 	nomineeAlreadyNominated: problem('nomineeAlreadyNominated', 409),
 	nomineeNotFound: problem('nomineeNotFound', 404),
+	notConfirmed: problem('notConfirmed', 422),
 	notFirstUser: problem('notFirstUser', 403),
+	notRevoked: problem('notRevoked', 409),
 	orphanedResourceExpiryRequired: problem('orphanedResourceExpiryRequired', 422),
 	orphanedResourceGrantTooLong: problem('orphanedResourceGrantTooLong', 422),
 	ownRequest: problem('ownRequest', 403),
@@ -1747,14 +1755,12 @@ export const APPLICATION_KEY_REVOCATION_REASONS = Object.freeze({
 export const RESOURCE_REVOCATION_REASONS = Object.freeze({
 	credentialCompromise: 'credentialCompromise',
 	custodianRequest: 'custodianRequest',
-	keyCompromise: 'keyCompromise',
 	securityIncident: 'securityIncident',
 } as const);
 
-/** The reasons for a global revocation (ruled), recorded on its `platform.revocation`. */
-export const PLATFORM_REVOCATION_REASONS = Object.freeze({
+/** The reasons for a sign-out of everyone (ruled), recorded on its `identity.signOutEveryone`. */
+export const SIGN_OUT_EVERYONE_REASONS = Object.freeze({
 	credentialCompromise: 'credentialCompromise',
-	keyCompromise: 'keyCompromise',
 	securityIncident: 'securityIncident',
 } as const);
 

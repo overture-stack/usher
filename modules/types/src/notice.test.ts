@@ -35,7 +35,7 @@ suite('validateNotice', () => {
 		principal,
 		category,
 		{ cursor: 'c-44', kind: 'baseline', v: 1 },
-		{ cursor: 'c-45', kind: 'global', v: 1 },
+		{ cursor: 'c-45', kind: 'signOutEveryone', v: 1 },
 		{ cursor: 'c-46', kind: 'servedResources', v: 1 },
 	]) {
 		test(`accepts a ${notice.kind} notice`, () => {
@@ -69,8 +69,8 @@ suite('validateNotice', () => {
 		],
 		['a member its kind does not define', { ...category, subjectTag: 'tag-ana' }, '(root)', NOTICE_RULES.members],
 		[
-			'a global notice naming a resource',
-			{ cursor: 'c', kind: 'global', resource: 'HEART_STUDY', v: 1 },
+			'a signOutEveryone notice naming a resource',
+			{ cursor: 'c', kind: 'signOutEveryone', resource: 'HEART_STUDY', v: 1 },
 			'(root)',
 			NOTICE_RULES.members,
 		],
@@ -99,7 +99,7 @@ suite('validateNotice', () => {
 	}
 
 	test('names every kind it accepts in its kind rule', () => {
-		assert.equal(NOTICE_RULES.kind, 'kind is principal, category, baseline, global or servedResources');
+		assert.equal(NOTICE_RULES.kind, 'kind is principal, category, baseline, signOutEveryone or servedResources');
 	});
 
 	for (const resource of MARKER_RESOURCES) {

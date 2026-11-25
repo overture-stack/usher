@@ -127,7 +127,7 @@ suite('the revocation channel, against the store', () => {
 			{ audience: harness.application(search).id, kind: 'servedResources' },
 			{ kind: 'principal', subject: SUBJECT },
 			{ kind: 'baseline' },
-			{ kind: 'global' },
+			{ kind: 'signOutEveryone' },
 		]);
 		const polled = Object.fromEntries(
 			await Promise.all(
@@ -145,9 +145,9 @@ suite('the revocation channel, against the store', () => {
 		const tag = async (audience: string): Promise<string> =>
 			`principal ${await tagOfSubject(harness.application(audience), SUBJECT)}`;
 		assert.deepEqual(polled, {
-			[portal]: [await tag(portal), 'baseline', 'global'],
-			[search]: [`category ${RESOURCES.a1}`, 'servedResources', await tag(search), 'baseline', 'global'],
-			[submission]: [`category ${RESOURCES.c3}`, await tag(submission), 'baseline', 'global'],
+			[portal]: [await tag(portal), 'baseline', 'signOutEveryone'],
+			[search]: [`category ${RESOURCES.a1}`, 'servedResources', await tag(search), 'baseline', 'signOutEveryone'],
+			[submission]: [`category ${RESOURCES.c3}`, await tag(submission), 'baseline', 'signOutEveryone'],
 		});
 		assert.deepEqual(pushed.map(describeNotice), polled[search]);
 	});
@@ -162,12 +162,12 @@ suite('the revocation channel, against the store', () => {
 		});
 		await stream.drain();
 
-		await insertNotices(harness.clients.migration, [{ kind: 'global' }]);
+		await insertNotices(harness.clients.migration, [{ kind: 'signOutEveryone' }]);
 		const committedAt = performance.now();
 		await stream.waitFor((notices) => notices.length >= 1, WAIT_MS);
 
 		const [arrival] = stream.notices();
-		assert.equal(arrival?.notice.kind, 'global');
+		assert.equal(arrival?.notice.kind, 'signOutEveryone');
 		assert.ok(
 			(arrival?.arrivedAt ?? Infinity) - committedAt <= REREAD_MS + SCHEDULING_SLACK_MS,
 			'the notice arrived later than the reread interval allows',
@@ -265,7 +265,7 @@ suite('the revocation channel, against the store', () => {
 			epoch: 'kept',
 			keptThrough: positions[0] ?? 0n,
 		});
-		await insertNotices(harness.clients.migration, [{ kind: 'global' }]);
+		await insertNotices(harness.clients.migration, [{ kind: 'signOutEveryone' }]);
 		const kept = await pollAll(harness.url, {
 			after: cursors[0] ?? '',
 			application: harness.application(search),
@@ -275,7 +275,7 @@ suite('the revocation channel, against the store', () => {
 			poll: 410,
 			push: 410,
 		});
-		assert.deepEqual(kept.notices.map(describeNotice), ['global']);
+		assert.deepEqual(kept.notices.map(describeNotice), ['signOutEveryone']);
 	});
 
 	test("records a refused channel assertion as channelAssertion.rejection by the system, denied, naming its reason, its application and the request's address", async (context) => {

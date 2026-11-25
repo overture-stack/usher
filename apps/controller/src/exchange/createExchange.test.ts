@@ -251,7 +251,7 @@ const PERSON_ID = '4e8b1c2d-7a3f-4b9e-8d6c-5f2a1e9b3c70';
 // A principal's standing as the store answers it: refused for the reason given, or for none.
 const standingRow = (refusal: StoredRefusal | undefined) => ({
 	revoked: refusal === 'revokedPrincipal',
-	revokedPlatform: refusal === 'revokedPlatform',
+	signedOutEveryone: refusal === 'signedOutEveryone',
 	signedOut: refusal === 'signedOutSession',
 });
 
@@ -1735,7 +1735,7 @@ suite('the token exchange', () => {
 		});
 
 		test('is answered one identical 403 when the store refuses the principal, recorded denied under its own reason naming the refused subject, its actor anonymous, and nothing written beside it', async (context) => {
-			const refusals: readonly StoredRefusal[] = ['revokedPlatform', 'revokedPrincipal', 'signedOutSession'];
+			const refusals: readonly StoredRefusal[] = ['signedOutEveryone', 'revokedPrincipal', 'signedOutSession'];
 			const forged = await post(standUp(context), withCredential('credential-forged'));
 
 			const outcomes = await Promise.all(

@@ -15,7 +15,7 @@ export interface Session {
 }
 
 /** Why the store refuses a principal whose token is otherwise accepted. */
-export type StoredRefusal = 'revokedPlatform' | 'revokedPrincipal' | 'signedOutSession';
+export type StoredRefusal = 'signedOutEveryone' | 'revokedPrincipal' | 'signedOutSession';
 
 /** Whose standing the store is asked about: the trusted issuer, the token's subject, and its session. */
 export interface StandingQuestion {

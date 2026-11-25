@@ -431,15 +431,15 @@ suite('createEventLog', () => {
 			wallClock: wallAt(0),
 		});
 
-		events.emit('notice.applied', smuggled({ entriesDropped: -1, kind: 'global' }));
-		events.emit('notice.applied', smuggled({ entriesDropped: 1.5, kind: 'global' }));
+		events.emit('notice.applied', smuggled({ entriesDropped: -1, kind: 'signOutEveryone' }));
+		events.emit('notice.applied', smuggled({ entriesDropped: 1.5, kind: 'signOutEveryone' }));
 		events.emit('catalogue.resourceListMissing', smuggled({ catalogue: { secret: 'eyJ' } }));
 
 		assert.deepEqual(
 			logger.lines.map(({ object }) => object['data']),
 			[
-				{ actorId: null, actorType: 'system', kind: 'global' },
-				{ actorId: null, actorType: 'system', kind: 'global' },
+				{ actorId: null, actorType: 'system', kind: 'signOutEveryone' },
+				{ actorId: null, actorType: 'system', kind: 'signOutEveryone' },
 				{ actorId: null, actorType: 'system' },
 			],
 		);

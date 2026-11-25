@@ -38,7 +38,7 @@ export type StoredNotice =
 			audience: string;
 			kind: 'servedResources';
 	  })
-	| (StoredNoticeBase & { kind: 'baseline' | 'global' })
+	| (StoredNoticeBase & { kind: 'baseline' | 'signOutEveryone' })
 	| (StoredNoticeBase & {
 			kind: 'category';
 

@@ -432,8 +432,8 @@ const isNonEmptyString = (value: unknown): value is string => typeof value === '
 const affectsPayload = (notice: Notice, payload: PermissionsPayload, tag: string | undefined): boolean => {
 	switch (notice.kind) {
 		case 'baseline':
-		case 'global':
 		case 'servedResources':
+		case 'signOutEveryone':
 			return true;
 		case 'category':
 			return Object.hasOwn(payload.permissions, notice.resource);
@@ -1097,7 +1097,7 @@ const createRuntime = ({
 					positive.dropResource(notice.resource) +
 					(anonymous.entry?.resources.has(notice.resource) === true ? dropAnonymous() : 0)
 				);
-			case 'global':
+			case 'signOutEveryone':
 				return positive.clear() + refusals.clear() + dropAnonymous();
 			case 'principal':
 				return positive.dropSubjectTag(notice.subjectTag);

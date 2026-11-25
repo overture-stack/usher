@@ -90,6 +90,7 @@ or display name is stored.
       lifted_by          uuid                   references users
       lifted_at          timestamptz
       check ((lifted_by is null) = (lifted_at is null))
+      check (reason in ('accountClosed', 'credentialCompromise', 'securityIncident', 'termsViolation'))
       unique (user_id) where lifted_at is null
 
 **Decide A: revoking a principal entirely is a history table of its own.** Recommended over the two
@@ -399,7 +400,7 @@ written.
     notices
       position              bigint       generated always as identity  primary key
       kind                  text         not null  check (kind in ('baseline', 'category',
-                                                   'global', 'principal', 'servedResources'))
+                                                   'principal', 'servedResources', 'signOutEveryone'))
       idp_subject_id        text         check (idp_subject_id <> '')
       resource_external_id  text         check (resource_external_id <> '')
       audience              uuid         references applications
@@ -412,7 +413,7 @@ One table carries every kind the Bridge's notice stream does. A principal's revo
 relayed from the identity provider are both `principal` notices naming the subject, since a Bridge
 treats them alike. A category change names the resource by its external id, as the payload names it.
 A change to the set served by an application names that application as `audience`, and the
-baseline and global kinds name nothing.
+baseline and signOutEveryone kinds name nothing.
 
 **Positions follow commit order, by serializing the writes.** An identity value is assigned at
 insert, so two transactions can commit out of order and a poll reading between them would skip the

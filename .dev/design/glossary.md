@@ -873,8 +873,8 @@ Two acts withdraw a person's access early, and they reach the person differently
 grant's `revoked_at`, so it leaves every token issued from then on: like a grant's expiry, it
 narrows, and a data request answers as though the grant had never been held. **Revoking a principal**
 is a row in `principal_revocations`, which the exchange refuses even while the person still has
-grants, so every request from them is answered `401` until the row is lifted, and lifting it keeps
-the history.
+grants, so every request from them is answered `401` until the row is lifted and they sign in again, and
+lifting it keeps the history.
 Both are announced on the revocation channel, so each takes effect at the next request rather than
 when a cached token expires. See [security-workflow.md](security-workflow.md) and
 [schema.md](schema.md).
@@ -883,6 +883,8 @@ when a cached token expires. See [security-workflow.md](security-workflow.md) an
 or within 30 seconds. It is not announced on the revocation channel, so Usher tokens already issued
 under the key stay readable to that application's Bridges until they expire. See
 [schema.md](schema.md) § Applications.
+A **sign-out of everyone** is not a revocation: it withdraws no grant and names no principal. See
+Sign-out.
 
 **Disambiguation note:** A data request never says which of these happened. Every refused identity,
 expired, invalid or revoked, gets one `401` and one text, and a narrowed answer says nothing of what
@@ -893,8 +895,8 @@ is the [profile view](profile-view.md)'s job.
 
 **Revocation channel**
 The notice stream from the Controller to each Bridge: one sequence of positions carrying every kind
-of notice, a principal's revocation, a category change, the baseline change, a global revocation and
-a sign-out. Two ways to read it: push (SSE or WebSocket, positions as event ids), for speed, and a
+of notice, a principal's revocation, a category change, the baseline change, a sign-out of everyone and
+a sign-out relayed from the identity provider. Two ways to read it: push (SSE or WebSocket, positions as event ids), for speed, and a
 poll for the notices after a position, which recovers what push missed and is the only liveness
 check. Bridges maintain both.
 
@@ -914,6 +916,20 @@ embedding Arranger may supply its own for reasons unrelated to principals, such 
 of its data. Usher's is built additively: each grant in the token renders one positive predicate,
 and those compose with `or`, so a record matching no predicate is simply never returned. Nothing is
 subtracted and no exclusion is computed.
+
+**Sign-out** _(relayed from the identity provider, and of everyone)_
+Usher refusing every sign-in token issued before a moment. A sign-out ends no session at the identity
+provider: a session still live there gets a fresh sign-in token, issued after the moment, and Usher
+accepts it.
+**A sign-out relayed from the identity provider** follows the end of one session there. The
+Controller receives the provider's back-channel logout, refuses the tokens issued for that session
+before it, and announces it on the revocation channel as a principal notice.
+**A sign-out of everyone** is recorded by a platform administrator, and refuses every sign-in token
+issued before it, for every principal, keeping every grant. Its own notice makes every Bridge drop
+every Usher token it holds. It answers sign-in tokens that may have leaked, and not a stolen refresh
+token, a hijacked provider session or a stolen signing key. It is meant to follow an operator ending
+every session at the identity provider. See [security-workflow.md](security-workflow.md) §
+Revocation scope.
 
 **SQON (Structured Query Object Notation)** _(Arranger-specific)_
 Arranger's filter expression format, and the wire format emitted by the Bridge. The Bridge builds the

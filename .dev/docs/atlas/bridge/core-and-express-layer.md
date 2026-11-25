@@ -822,8 +822,8 @@ an eviction, an expiry, a delete or a clear.
 | `principal`       | every entry indexed under that subject tag                                                                 |
 | `category`        | every entry naming the resource, found by scanning; the anonymous entry too if it names it, then a refetch |
 | `baseline`        | every positive entry and the anonymous entry, then a refetch                                               |
-| `global`          | the positive store, the refusal store and the anonymous entry, then a refetch                              |
 | `servedResources` | every positive entry and the anonymous entry, then a refetch, as `baseline` does                           |
+| `signOutEveryone` | the positive store, the refusal store and the anonymous entry, then a refetch                              |
 
 A 410 from the stream also drops every positive entry and the anonymous entry, as the stream note sets
 out. The core's `reset` does this for a 410: it keeps refusals, forgets which category gaps it has
@@ -984,7 +984,7 @@ How the token is decrypted and validated, and why `sub` is bound to the kind of 
 
 The core keeps a notice epoch and a bounded log of applied notices. After decrypting, it asks whether
 any notice applied since the flight began affects the payload: its subject, a resource it names, or a
-global notice. If so, the answer is discarded for every waiter and exchanged once more, unless the
+signOutEveryone notice. If so, the answer is discarded for every waiter and exchanged once more, unless the
 core has stopped, which starts no exchange. If the log no
 longer reaches back to the flight's start, the payload is treated as affected. The check runs after
 the last `await`, and rendering and the cache write follow it synchronously, so no notice can land

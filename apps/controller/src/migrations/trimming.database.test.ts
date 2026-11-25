@@ -69,8 +69,8 @@ suite('trimming the notice stream', () => {
 		await clearStream(owner);
 		const controller = await database.connect('runtime');
 		const observer = await database.connect('migration');
-		const aged = await inTurn(['baseline', 'global', 'baseline'], (kind) => insertAged(owner, kind, 200));
-		const recent = await inTurn(['global', 'baseline'], (kind) => insertAged(owner, kind, 30));
+		const aged = await inTurn(['baseline', 'signOutEveryone', 'baseline'], (kind) => insertAged(owner, kind, 200));
+		const recent = await inTurn(['signOutEveryone', 'baseline'], (kind) => insertAged(owner, kind, 30));
 		const heldBefore = await positionsHeld(observer);
 		const watermarkBefore = await watermark(observer);
 
@@ -93,13 +93,13 @@ suite('trimming the notice stream', () => {
 		const owner = await database.connect('migration');
 		await clearStream(owner);
 		const controller = await database.connect('runtime');
-		const aged = await inTurn(['baseline', 'global'], (kind) => insertAged(owner, kind, 900));
+		const aged = await inTurn(['baseline', 'signOutEveryone'], (kind) => insertAged(owner, kind, 900));
 
 		const first = await trim(controller);
 		const second = await trim(controller);
 		const laterAged = await insertAged(owner, 'baseline', 900);
 		const third = await trim(controller);
-		await insertAged(owner, 'global', 10);
+		await insertAged(owner, 'signOutEveryone', 10);
 		const fourth = await trim(controller);
 
 		assert.deepEqual([first, second, third, fourth], [aged.at(-1), aged.at(-1), laterAged, laterAged]);
@@ -238,7 +238,7 @@ suite('trimming the notice stream a bounded number of notices at a time', () => 
 		await clearStream(owner);
 		const controller = await database.connect('runtime');
 		const aged = await insertAgedNotices(owner, 5);
-		const young = await insertAged(owner, 'global', YOUNG_SECONDS);
+		const young = await insertAged(owner, 'signOutEveryone', YOUNG_SECONDS);
 
 		const returned = await trimNoticesBounded(controller, 2);
 
@@ -253,7 +253,7 @@ suite('trimming the notice stream a bounded number of notices at a time', () => 
 		await clearStream(owner);
 		const controller = await database.connect('runtime');
 		const firstAged = await insertAged(owner, 'baseline', AGED_SECONDS);
-		const firstYoung = await insertAged(owner, 'global', YOUNG_SECONDS);
+		const firstYoung = await insertAged(owner, 'signOutEveryone', YOUNG_SECONDS);
 		const agedAfterYoung = await insertAged(owner, 'baseline', AGED_SECONDS);
 		const lastYoung = await insertAged(owner, 'baseline', 0);
 
@@ -272,7 +272,7 @@ suite('trimming the notice stream a bounded number of notices at a time', () => 
 
 		const unbounded = await trim(controller);
 		const boundedAfter = await trimNoticesBounded(controller, 1);
-		const laterAged = await insertAged(owner, 'global', AGED_SECONDS);
+		const laterAged = await insertAged(owner, 'signOutEveryone', AGED_SECONDS);
 		const boundedLater = await trimNoticesBounded(controller, 1);
 		await insertAged(owner, 'baseline', YOUNG_SECONDS);
 		const boundedOverYoung = await trimNoticesBounded(controller, 1);
@@ -290,7 +290,7 @@ suite('trimming the notice stream a bounded number of notices at a time', () => 
 		await clearStream(owner);
 		const controller = await database.connect('runtime');
 		const aged = await insertAgedNotices(owner, 7);
-		const young = await insertAged(owner, 'global', YOUNG_SECONDS);
+		const young = await insertAged(owner, 'signOutEveryone', YOUNG_SECONDS);
 
 		const calls = await inTurn([1, 2, 3, 4], async () => {
 			const before = (await positionsHeld(owner)).length;

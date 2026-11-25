@@ -25,7 +25,7 @@ const BASE = { createdAt: 1_000n, position: 7n };
 
 const NOTICES: readonly StoredNotice[] = [
 	{ ...BASE, kind: 'baseline' },
-	{ ...BASE, kind: 'global' },
+	{ ...BASE, kind: 'signOutEveryone' },
 	{
 		...BASE,
 		kind: 'principal',
@@ -58,8 +58,8 @@ suite('the notice versions header', () => {
 });
 
 suite('which audiences a notice reaches', () => {
-	test('reaches every audience with a principal, baseline or global notice', () => {
-		NOTICES.filter(({ kind }) => ['baseline', 'global', 'principal'].includes(kind)).forEach((notice) => {
+	test('reaches every audience with a principal, baseline or signOutEveryone notice', () => {
+		NOTICES.filter(({ kind }) => ['baseline', 'signOutEveryone', 'principal'].includes(kind)).forEach((notice) => {
 			assert.equal(reaches(notice, OTHER_AUDIENCE), true, notice.kind);
 		});
 	});
