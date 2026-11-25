@@ -210,7 +210,7 @@ would otherwise fail.
       name               text         not null
       description        text
       check ((scope = 'resource') = (resource_id is not null))
-      unique nulls not distinct (scope, resource_id, name)
+      unique nulls not distinct (scope, resource_id, lower(name collate "und-x-icu"))
 
     resource_categories
       resource_id        uuid         not null  references resources
@@ -218,7 +218,8 @@ would otherwise fail.
       primary key (resource_id, category_id)
 
 The uniqueness treats a null `resource_id` as equal to another, so two global categories cannot share
-a name; PostgreSQL otherwise counts nulls as distinct. `unmarked` is a seeded global category. A payload names a category with its scope, `global.unmarked`,
+a name; PostgreSQL otherwise counts nulls as distinct. It compares a name in any letter case, as a
+resource's external id is compared, while the name keeps the letter case it was written in. `unmarked` is a seeded global category. A payload names a category with its scope, `global.unmarked`,
 which is `scope` and `name` joined. That every live resource offers at least one category is enforced
 by the Controller when a resource is registered, since a constraint across two tables at commit would
 cost a deferred trigger for a rule the registration path already holds.

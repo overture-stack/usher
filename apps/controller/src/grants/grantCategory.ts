@@ -33,9 +33,10 @@ export const categoryNamingOf = (
 };
 
 /**
- * The category a naming names that a resource offers, read in a change's transaction: `null` for
- * the whole resource; a category the resource does not offer is refused 422 `categoryNotOffered`,
- * the submitter category's refusal saying it was the instance's.
+ * The category a naming names that a resource offers, read in a change's transaction, under the
+ * scoped name it was registered as whatever letter case the naming used: `null` for the whole
+ * resource; a category the resource does not offer is refused 422 `categoryNotOffered`, the
+ * submitter category's refusal saying it was the instance's.
  *
  * @param grants the grant store, on the change's connection.
  * @param naming the category named.
@@ -48,13 +49,7 @@ export const offeredCategory = async (
 ): Promise<{ id: string; scopedName: string } | null> =>
 	naming.kind === 'wholeResource'
 		? null
-		: {
-				id:
-					(await grants.findOfferedCategory(naming.scopedName, resourceId)) ??
-					refuseWithin(
-						naming.submitter
-							? GRANT_PROBLEMS.submitterCategoryNotOffered
-							: GRANT_PROBLEMS.categoryNotOffered,
-					),
-				scopedName: naming.scopedName,
-			};
+		: ((await grants.findOfferedCategory(naming.scopedName, resourceId)) ??
+			refuseWithin(
+				naming.submitter ? GRANT_PROBLEMS.submitterCategoryNotOffered : GRANT_PROBLEMS.categoryNotOffered,
+			));

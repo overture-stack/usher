@@ -90,6 +90,7 @@ suite('the package root', () => {
 			usherTypes.canonicalRecordNarrowing,
 			usherTypes.fieldNamesReadBy,
 			usherTypes.isCategoryName,
+			usherTypes.isConcreteGlobalCategory,
 			usherTypes.isLiteralValue,
 			usherTypes.keySegment,
 			usherTypes.normalizedCondition,

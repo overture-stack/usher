@@ -485,10 +485,14 @@ export interface GrantStore {
 	endExpiredGrant(terms: GrantTerms, now: Date): Promise<boolean>;
 
 	/**
-	 * The id of the category a scoped name names that a resource offers: any global category, and the
-	 * resource's own categories; `undefined` for any other name.
+	 * The category a scoped name names that a resource offers, its name compared in any letter case:
+	 * any global category, and the resource's own categories, with its id and its scoped name as
+	 * registered; `undefined` for any other name.
 	 */
-	findOfferedCategory(scopedName: string, resourceId: string): Promise<string | undefined>;
+	findOfferedCategory(
+		scopedName: string,
+		resourceId: string,
+	): Promise<{ id: string; scopedName: string } | undefined>;
 
 	/**
 	 * The person holding a subject's identity under the trusted issuer, recorded on first meeting

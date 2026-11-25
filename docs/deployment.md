@@ -461,6 +461,14 @@ Once an administrator has accepted, the first-user role confers nothing, and any
 
 A removal is recorded as `admin.removal`, at `critical`, and each nomination it revokes as `admin.nominationRevocation`.
 
+### Global categories
+
+A global category is one every resource may offer. An administrator registers one with `POST /admin/categories`, naming it by its name alone, such as `controlled`, which Usher answers as `global.controlled`. Before it is registered, each catalogue's category mapping must define the category, or declare it absent: a catalogue whose mapping does neither denies its whole result once the category exists. Map it and register it before any record carrying it is indexed: until both are done, such records match no category, and are served as `global.unmarked`. `GET /admin/categories` lists the global categories, and `PATCH /admin/categories/{scopedName}` changes a category's description.
+
+A name keeps the letter case it is registered in, and only one global category holds a name in any letter case: once `Controlled` is registered, `controlled` is refused with `409` `alreadyExists`, the text naming `global.Controlled`. A name holding anything but letters, digits, underscores and hyphens, or the reserved `unmarked` or `__proto__` in any letter case, is refused with `422` `invalidCategoryName`. Each catalogue's category mapping names the category in its registered spelling, since the Bridge compares the mapping's names with Usher's exactly: a mapping writing it in another letter case leaves it unmapped, and the catalogue's whole result is denied.
+
+A registration is recorded as `category.creation`, at `warning`, and a change of description as `category.descriptionChange`, at `info`.
+
 ## Registering resources
 
 **A resource is what a catalogue's records name in their resource field, such as a study's id, and an application reaches only the resources registered as served by it.** A platform administrator registers each through the Management API, with a management token from a client in `USHER_MANAGEMENT_CLIENTS`:

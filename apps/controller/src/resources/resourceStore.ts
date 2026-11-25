@@ -1,6 +1,7 @@
 import pg from 'pg';
 
 import type { StoreReader } from '../managementApi/index.js';
+import { letterCaseKey } from '../store/index.js';
 import {
 	countedOwnerCondition,
 	latestDecisionOf,
@@ -13,10 +14,6 @@ import type { ListingQuery, Registration, StoredResource } from './types.js';
 // An id as the store generates one; any other text names no application, and is never sent to the
 // store, which would refuse it as a uuid.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-
-// The key one externalId holds in every letter case, as the unique index on `resources` writes it:
-// lowered under ICU's root collation, so a letter beyond ASCII folds alike under any database default.
-const letterCaseKey = (column: string): string => `lower(${column} COLLATE "und-x-icu")`;
 
 interface IdRow {
 	id: string;

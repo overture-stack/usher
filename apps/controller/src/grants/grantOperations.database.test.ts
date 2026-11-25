@@ -10,6 +10,7 @@ import {
 	createGrant,
 	personCaller,
 	PROBLEMS,
+	registerCategory,
 	revokeGrant,
 } from '../../testing/harness/admin.js';
 import { AUDIT_EVENT_TYPES, auditRows, dataOf, emittedType } from '../../testing/harness/auditEvents.js';
@@ -31,6 +32,7 @@ import {
 	storedDecisions,
 	storedGrants,
 	STUDY_A1,
+	STUDY_B2,
 	UNKNOWN_STUDY,
 	UNMARKED,
 } from '../../testing/fixtures/grants.js';
@@ -61,6 +63,31 @@ const withExpiredViewing = (now: number): ReturnType<typeof grantsFixture> =>
 	});
 
 suite("a grant's creation in the store", () => {
+	test("finds the category a grant names in any letter case, global or the resource's own, and records it under the spelling registered", async () => {
+		await withHarness({ fixture: grantsFixture() }, async (harness) => {
+			assertSucceeded(
+				await registerCategory(await administratorCaller(harness), { name: 'Tier' }),
+				'the registration',
+			);
+
+			const global = await createGrant(
+				await personCaller(harness, CAST.ownerOfA1),
+				grantFor(CAST.newcomer, { category: 'global.tier' }),
+			);
+			const own = await createGrant(
+				await personCaller(harness, CAST.ownerOfB2),
+				grantFor(CAST.newcomer, { category: 'resource.INTERNAL', resource: STUDY_B2 }),
+			);
+
+			assertSucceeded(global, 'the grant naming the global category');
+			assertSucceeded(own, "the grant naming the resource's own category");
+			const recorded = (await auditRows(harness.clients.migration))
+				.filter((row) => row.type === emittedType(AUDIT_EVENT_TYPES.grantCreation))
+				.map((row) => dataOf(row)['category']);
+			assert.deepEqual(recorded.toSorted(), ['global.Tier', B2_OWN_CATEGORY].toSorted());
+		});
+	});
+
 	test('commits the grant, its holder met first, its acceptance under auto-accept, its notices and its grant.creation together', async () => {
 		await withHarness({ configuration: { autoAccept: true }, fixture: grantsFixture() }, async (harness) => {
 			const client = harness.clients.migration;

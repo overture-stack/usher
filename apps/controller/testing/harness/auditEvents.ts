@@ -33,6 +33,7 @@ export const AUDIT_EVENT_TYPES = Object.freeze({
 	applicationServedResourcesChange: 'application.servedResourcesChange',
 	auditRead: 'audit.read',
 	categoryCreation: 'category.creation',
+	categoryDescriptionChange: 'category.descriptionChange',
 	channelAssertionRejection: 'channelAssertion.rejection',
 	channelAssertionRejectionTally: 'channelAssertion.rejectionTally',
 	grantCreation: 'grant.creation',

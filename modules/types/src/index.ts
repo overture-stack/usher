@@ -32,7 +32,13 @@ export type {
 	ResourcePermissions,
 	RevisionAction,
 } from './payload.js';
-export { isCategoryName, PAYLOAD_MEMBER_NAMES, PAYLOAD_VERSION, validatePayload } from './payload.js';
+export {
+	isCategoryName,
+	isConcreteGlobalCategory,
+	PAYLOAD_MEMBER_NAMES,
+	PAYLOAD_VERSION,
+	validatePayload,
+} from './payload.js';
 export type { ValidationProblem } from './problems.js';
 export { keySegment, UsherContractError } from './problems.js';
 export type { HeldResource, RecordNarrowingDescription } from './recordNarrowing.js';

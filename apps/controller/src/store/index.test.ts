@@ -14,6 +14,7 @@ suite("the store's module", () => {
 			'databaseCaFile',
 			'holdsUnstorableText',
 			'isStorableText',
+			'letterCaseKey',
 			'openStore',
 			'prepareStore',
 			'readStoreProbe',

@@ -255,7 +255,8 @@ const fakeStore = (world: World, calls: Call[]): GrantStore => {
 		},
 		findOfferedCategory: async (scopedName, resourceId) => {
 			called('findOfferedCategory', scopedName, resourceId);
-			return world.categories[scopedName];
+			const id = world.categories[scopedName];
+			return id === undefined ? undefined : { id, scopedName };
 		},
 		findOrRecordPerson: async (subject, now) => {
 			called('findOrRecordPerson', subject, now);

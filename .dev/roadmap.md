@@ -361,13 +361,12 @@ predefined column of the uploaded data. Where the submitted data already holds a
 column, the value is read from the data instead, so one CSV can mix records of different categories.
 Whether consumers see that column is Arranger's concern.
 
-### Deployment runbook has no home, and three procedures now want one
+### Deployment runbook has no home, and two procedures now want one
 
-Three sequences are recorded in design documents and nowhere an operator reads, which means each is a responsibility with no owner. They are not related to each other beyond that, and the absence of a destination is what they have in common.
+Two sequences are recorded in design documents and nowhere an operator reads, which means each is a responsibility with no owner. They are not related to each other beyond that, and the absence of a destination is what they have in common.
 
 - **Break-glass access.** If every platform administrator is unavailable, recovery is an IdP operation. Overture's own deployment documents it beside its Keycloak configuration: who may run it, and the events it relies on as its audit trail. A deployment of Usher elsewhere has nothing of Usher's to start from. See [admin-model.md](design/admin-model.md).
 - **Establishing a category.** Define the category, appoint whoever governs it, and only then accept data carrying it. The decision to treat a custodian vacancy as a governance failure rather than a system state depends on this sequence being followed. See [decisions.md](design/decisions.md) § Granting is one function.
-- **Adding a category to a live instance.** Configure the mapping in the ushered application first, then define the category in the Controller, and both before any record carrying it is indexed, since the check compares registrations with what Usher declares and never reads the data. The reverse order withholds each resource offering the category from the catalogues not yet mapping it, the whole resource rather than the affected records, until the application catches up. See [adapter-integration.md](design/adapter-integration.md) § Category dictionary introspection.
 
 A design document that says an operator must do something, without an operator-facing document, has moved the responsibility rather than discharged it.
 

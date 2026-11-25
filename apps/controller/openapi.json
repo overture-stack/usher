@@ -656,7 +656,8 @@
 					}
 				},
 				"required": ["description", "name"],
-				"type": "object"
+				"type": "object",
+				"description": "A global category: its scoped name, and its description, `null` when it has none."
 			},
 			"CategoryList": {
 				"additionalProperties": false,
@@ -669,7 +670,8 @@
 					}
 				},
 				"required": ["categories"],
-				"type": "object"
+				"type": "object",
+				"description": "The global categories, ordered by name."
 			},
 			"CategoryRegistration": {
 				"properties": {
@@ -677,13 +679,17 @@
 						"type": "string"
 					},
 					"name": {
-						"description": "The name alone, without its scope: `controlled`, registered as `global.controlled`.",
+						"description": "The name alone, without its scope: `controlled`, registered as `global.controlled`. Letters, digits, underscores and hyphens only; `unmarked` and `__proto__` are refused in any letter case. The letter case is kept, and a name another global category holds in any letter case is refused.",
 						"examples": ["controlled"],
-						"type": "string"
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]+$",
+						"minLength": 1
 					}
 				},
 				"required": ["name"],
-				"type": "object"
+				"type": "object",
+				"additionalProperties": false,
+				"description": "The category to register: its name, and optionally its description. Any other member is refused."
 			},
 			"CategoryUpdate": {
 				"description": "A JSON Merge Patch: `null` clears the description. Naming `name` is refused with `422`.",
@@ -693,7 +699,8 @@
 					}
 				},
 				"required": [],
-				"type": "object"
+				"type": "object",
+				"additionalProperties": false
 			},
 			"Decision": {
 				"additionalProperties": false,
@@ -2060,7 +2067,7 @@
 				"type": "object"
 			},
 			"ScopedCategoryName": {
-				"description": "A category name with its scope: `global.` and a name.",
+				"description": "A category's name with its scope: `global.` and the name, for a category every resource may offer, or `resource.` and the name, for one that exists only in its resource. A name holds no dot.",
 				"examples": ["global.controlled"],
 				"type": "string"
 			},
@@ -3323,7 +3330,7 @@
 		},
 		"/admin/categories": {
 			"get": {
-				"description": "Lists every global category, to platform administrators and to principals owning a resource.",
+				"description": "Lists every global category: a category any resource may offer, defined for the whole platform rather than for one resource. Each is named by its scoped name, `global.` and its name, such as `global.controlled`, ordered by name. `global.unmarked` is listed too, the category of records matching no other. A resource's own categories are never listed here.\n\nYou may list them as a platform administrator, or as a counted owner of at least one resource: a person holding a live grant of the owner role that they accepted. Anyone else is refused. The listing records nothing.\n\nChecked in this order:\n\n1. Usher has no administrator yet: `403` `noAdministratorYet`.\n2. You are a service account: `403` `serviceAccountNotPermitted`.\n3. You are neither a platform administrator nor a counted owner: `403` `ownersAndAdministratorsOnly`.",
 				"operationId": "listCategories",
 				"responses": {
 					"400": {
@@ -3356,7 +3363,10 @@
 								}
 							}
 						},
-						"description": "The principal neither administers the platform nor owns a resource; `ownersAndAdministratorsOnly`. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
+						"description": "`ownersAndAdministratorsOnly`: you are neither a platform administrator nor a counted owner of a resource. `serviceAccountNotPermitted`: the token belongs to a service account rather than a person. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
 					},
 					"503": {
 						"$ref": "#/components/responses/ReadUnavailable"
@@ -3369,7 +3379,7 @@
 								}
 							}
 						},
-						"description": "The categories."
+						"description": "The global categories, ordered by name."
 					}
 				},
 				"security": [
@@ -3381,7 +3391,7 @@
 				"tags": ["Categories"]
 			},
 			"post": {
-				"description": "Registers a global category by its name alone, for platform administrators: `controlled` is answered as `global.controlled`.\n\nA name holds letters, digits, underscores and hyphens, and no scope separator. Every category registered here is global.",
+				"description": "Registers a global category by its name alone, for platform administrators. A global category is one every resource may offer. Each catalogue must define it, or declare it absent, in its category mapping before it is registered: a catalogue that does neither denies its whole result once the category exists. The name is answered with its scope, so `controlled` is registered and answered as `global.controlled`.\n\nA name is not empty and holds only letters, digits, underscores and hyphens: a dot is refused, as the dot separates the scope from the name. `unmarked`, the category of records matching no other, and `__proto__` are refused in any letter case. A name keeps the letter case it is registered in, and only one global category holds a name in any letter case: once `Controlled` is registered, `controlled` is refused. Each catalogue's category mapping names the category in its registered spelling, since the mapping is compared with Usher's names exactly.\n\nChecked in this order:\n\n1. You are not a platform administrator: `403` `administratorOnly`, before the body is read.\n2. The body is not one object holding a `name` string, and a `description` string if sent, and no other member: `400`.\n3. The name is empty, holds another character, or is `unmarked` or `__proto__` in any letter case: `422` `invalidCategoryName`.\n4. A global category holds that name in any letter case: `409` `alreadyExists`, the text naming that category, and nothing is written.\n\nUsher logs the registration as the audit event `category.creation`, at `warning`. A refused registration records the name given when it is one that could be registered.",
 				"operationId": "registerCategory",
 				"requestBody": {
 					"content": {
@@ -3447,7 +3457,7 @@
 								}
 							}
 						},
-						"description": "A global category of that name exists; `alreadyExists`."
+						"description": "`alreadyExists`: a global category holds that name in some letter case, and the text names it by its registered spelling; choose another name."
 					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
@@ -3459,11 +3469,26 @@
 						"content": {
 							"application/problem+json": {
 								"schema": {
-									"$ref": "#/components/schemas/ProblemDetails"
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["invalidCategoryName"]
+												}
+											},
+											"type": "object"
+										}
+									]
 								}
 							}
 						},
-						"description": "The name is empty, holds a character outside letters, digits, underscores and hyphens, or is not admitted by the payload contract."
+						"description": "`invalidCategoryName`: the name is empty, holds a character other than letters, digits, underscores and hyphens, or is `unmarked` or `__proto__` in any letter case."
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
@@ -3476,7 +3501,7 @@
 								}
 							}
 						},
-						"description": "The category is registered; `name` carries its scope."
+						"description": "The category is registered, with its scoped name and its description, `null` when none was given."
 					}
 				},
 				"security": [
@@ -3490,7 +3515,7 @@
 		},
 		"/admin/categories/{scopedName}": {
 			"patch": {
-				"description": "Updates a category's description as a JSON Merge Patch, for platform administrators. `null` clears it. The name stays as registered.",
+				"description": "Updates a global category's description, as a JSON Merge Patch, for platform administrators. A string sets the description, and `null` clears it. The name stays as it was registered.\n\nChecked in this order:\n\n1. You are not a platform administrator: `403` `administratorOnly`, before the body is read.\n2. The body is not one object, or its `description` is neither a string nor `null`: `400`.\n3. The body names a member other than `description`, such as `name`: `422` `memberNotSettable`.\n4. The scoped name in the path names no registered global category, its name compared in any letter case: `404` `categoryNotFound`. A resource's own category, or a name without the `global.` scope, is never found.\n\nThe answer is the category as it stands after the change, under the spelling it was registered in, whatever letter case the path used. A patch that leaves the description as it is changes nothing, is answered the same way, and records nothing. Otherwise Usher logs the change as the audit event `category.descriptionChange`, at `info`, with the description before and after.",
 				"operationId": "updateCategory",
 				"parameters": [
 					{
@@ -3541,6 +3566,28 @@
 						},
 						"description": "The principal is no platform administrator; `administratorOnly`, before any lookup, so the answer is the same whether or not the thing named exists. A service account receives `serviceAccountNotPermitted`. `noAdministratorYet`: Usher has no administrator yet, and refuses every operation but those on nominations, until one accepts."
 					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["categoryNotFound"]
+												}
+											},
+											"type": "object"
+										}
+									]
+								}
+							}
+						},
+						"description": "`categoryNotFound`: no registered global category has the scoped name in the path."
+					},
 					"413": {
 						"$ref": "#/components/responses/BodyTooLarge"
 					},
@@ -3551,17 +3598,39 @@
 						"content": {
 							"application/problem+json": {
 								"schema": {
-									"$ref": "#/components/schemas/ProblemDetails"
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/ProblemDetails"
+										},
+										{
+											"properties": {
+												"code": {
+													"enum": ["memberNotSettable"]
+												}
+											},
+											"type": "object"
+										}
+									]
 								}
 							}
 						},
-						"description": "The update names a member it may not set, such as `name`."
+						"description": "`memberNotSettable`: the body names a member other than `description`, such as `name`."
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
 					},
 					"503": {
 						"$ref": "#/components/responses/ChangeUnavailable"
 					},
 					"2XX": {
-						"description": "The category is updated."
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Category"
+								}
+							}
+						},
+						"description": "The category as it stands after the change."
 					}
 				},
 				"security": [

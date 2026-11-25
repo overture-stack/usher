@@ -3,6 +3,7 @@ import pg from 'pg';
 import { ControllerError } from '../failures/index.js';
 import { findOrRecordPerson } from '../findOrRecordPerson.js';
 import { countedOwnerCondition, liveGrantCondition, readResourceStanding } from '../resourceStanding/index.js';
+import { letterCaseKey } from '../store/index.js';
 import { viewedGrantColumns, viewedGrantOf, type ViewedGrantRow } from './grantColumns.js';
 import { requestColumns } from './grantRequestPage.js';
 import type { GrantStore, StoredGrant, StoredGrantRequest, StoredRole } from './types.js';
@@ -94,17 +95,13 @@ export const sqlGrantStore = (
 			if (named === undefined) {
 				return undefined;
 			}
-			return named['scope'] === 'global'
-				? idOf(
-						`SELECT id::text AS id FROM ${table('categories')}
-              WHERE scope = 'global' AND name = $1`,
-						[named['name']],
-					)
-				: idOf(
-						`SELECT id::text AS id FROM ${table('categories')}
-              WHERE scope = 'resource' AND resource_id = $2 AND name = $1`,
-						[named['name'], resourceId],
-					);
+			const { rows } = await connection.query<{ id: string; scopedName: string }>(
+				`SELECT id::text AS id, scope || '.' || name AS "scopedName" FROM ${table('categories')}
+          WHERE scope = $1 AND resource_id IS NOT DISTINCT FROM $2::uuid
+            AND ${letterCaseKey('name')} = ${letterCaseKey('$3::text')}`,
+				[named['scope'], named['scope'] === 'global' ? null : resourceId, named['name']],
+			);
+			return rows[0];
 		},
 		findOrRecordPerson: (subject, now) => findOrRecordPerson(connection, schema, { issuer, subject }, now),
 		findPerson: (subject) =>

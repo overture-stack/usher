@@ -10,6 +10,7 @@ import {
 	readAdministratorStatus,
 	sqlAdministratorStore,
 } from '../administrators/index.js';
+import { createCategoryRoutes, sqlCategoryStore } from '../categories/index.js';
 import {
 	createAdmission,
 	SHARE_EXCEEDED_TALLY_INTERVAL_MILLISECONDS,
@@ -421,6 +422,15 @@ export const createController = (configuration: ControllerConfiguration): Contro
 						schema: configuration.databaseSchema,
 					}),
 				directory,
+				settings,
+				store: reader,
+				trail: wakingTrail,
+			},
+			management,
+		),
+		...createCategoryRoutes(
+			{
+				categoryStoreOf: (connection) => sqlCategoryStore(connection, configuration.databaseSchema),
 				settings,
 				store: reader,
 				trail: wakingTrail,

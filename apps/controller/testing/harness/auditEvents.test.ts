@@ -781,7 +781,7 @@ suite("the controller's events, as the document registers them", () => {
 			'applicationKey.issuance': 'info',
 			'applicationKey.unreadable': 'critical',
 			'audit.read': 'info',
-			'category.creation': 'info',
+			'category.creation': 'warning',
 			'grant.decision': 'info',
 			'identity.revocationLift': 'warning',
 			'platform.revocation': 'critical',

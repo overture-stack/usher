@@ -101,6 +101,7 @@ export type AuditEventType =
 	| 'applicationKey.unreadable'
 	| 'audit.read'
 	| 'category.creation'
+	| 'category.descriptionChange'
 	| 'channelAssertion.rejection'
 	| 'channelAssertion.rejectionTally'
 	| 'grant.creation'
