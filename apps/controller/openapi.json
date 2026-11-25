@@ -496,7 +496,8 @@
 						"type": "string"
 					},
 					"id": {
-						"$ref": "#/components/schemas/ApplicationId"
+						"$ref": "#/components/schemas/ApplicationId",
+						"description": "Root `id`: the application's id and audience, the root `id` of the answer registering it and the `{applicationId}` of its operations. Each key's id is `keys[].id`."
 					},
 					"keys": {
 						"description": "Every key issued to the application, in order of `issuedAt`.",
@@ -536,6 +537,7 @@
 						"description": "When the first exchange verified with the key was answered; `null` until then."
 					},
 					"id": {
+						"description": "The key's id, `keys[].id` in an application's answer and `key.id` in the answer registering it: the `{keyId}` revoking this key, and `keyId` in the audit log. It never goes into the identity provider, a Bridge or a token; the application's id is the root `id`.",
 						"format": "uuid",
 						"type": "string"
 					},
@@ -1381,6 +1383,7 @@
 				"additionalProperties": false,
 				"properties": {
 					"id": {
+						"description": "The key's id, `key.id` in the answer registering an application and root `id` in the answer issuing a key: the `{keyId}` revoking this key, how `GET /admin/applications/{applicationId}` tells the application's keys apart, and `keyId` in the audit log. It never goes into the identity provider, a Bridge or a token; the application's id is the registration's root `id`.",
 						"format": "uuid",
 						"type": "string"
 					},
@@ -1707,7 +1710,8 @@
 						"type": "string"
 					},
 					"id": {
-						"$ref": "#/components/schemas/ApplicationId"
+						"$ref": "#/components/schemas/ApplicationId",
+						"description": "Root `id`: the application's id and audience, never the key's. It goes in the identity provider client's audience mapper and in the Bridge's `audience`, and is the `{applicationId}` of the application's other operations. The key's id is `key.id`."
 					},
 					"key": {
 						"$ref": "#/components/schemas/IssuedApplicationKey"
@@ -2815,7 +2819,7 @@
 		},
 		"/admin/applications": {
 			"post": {
-				"description": "Each application gets a key of its own, so an application that is compromised cannot read the Usher tokens issued to any other.\n\nRegisters an application and issues its first key, for platform administrators.\n\nThe application's `id` is a generated uuid and is its audience: the `aud` carried by its Usher tokens, and the `iss` of its Bridge's channel assertions.\n\n`displayName` is stored trimmed and normalized to NFC, the form whose length is counted. `description` is stored trimmed, and a description that is empty once trimmed is stored as `null`. `displayName` is the label shown to people. It is never matched against anything, so two applications may share one.\n\nThe key's `value` is in this answer alone. The Controller stores it encrypted and never shows it again.\n\nThe audit events `application.registration` and then `applicationKey.issuance` record the registration.",
+				"description": "Each application gets a key of its own, so an application that is compromised cannot read the Usher tokens issued to any other.\n\nRegisters an application and issues its first key, for platform administrators.\n\nThe answer holds two ids. `id` at its root is the application's id, a generated uuid and its audience: the `aud` carried by its Usher tokens and the `iss` of its Bridge's channel assertions. It goes in the identity provider client's audience mapper, so the application's sign-in tokens carry it in `aud`, and in the Bridge's `audience`, and it is the `{applicationId}` of the application's other operations. `key.id` is the id of the key alone: the `{keyId}` revoking it, how `GET /admin/applications/{applicationId}` tells the application's keys apart, and `keyId` in the audit log. It never goes into the identity provider, a Bridge or a token. The SOP [Registering an application](https://github.com/overture-stack/usher/blob/main/docs/sops/registering-an-application.md) gives the steps.\n\n`displayName` is stored trimmed and normalized to NFC, the form whose length is counted. `description` is stored trimmed, and a description that is empty once trimmed is stored as `null`. `displayName` is the label shown to people. It is never matched against anything, so two applications may share one.\n\n`key.value` is in this answer alone, and goes straight into the deployment's secret store. The Controller stores it encrypted and never shows it again.\n\nThe audit events `application.registration` and then `applicationKey.issuance` record the registration.",
 				"operationId": "registerApplication",
 				"requestBody": {
 					"content": {
@@ -3012,7 +3016,7 @@
 		},
 		"/admin/applications/{applicationId}/keys": {
 			"post": {
-				"description": "Without a second live key, replacing an application's key would leave every replica still holding the old one refused until it restarted.\n\nIssues another key for an application, for platform administrators, so the application's replicas can move to it while the key they hold stays live. The request carries no body.\n\nAn application holds at most two live keys. A third is refused with `applicationKeyLimit` until one of the two live keys is revoked. The key's `value` is in this answer alone.\n\nThe audit event `applicationKey.issuance` records the issue.",
+				"description": "Without a second live key, replacing an application's key would leave every replica still holding the old one refused until it restarted.\n\nIssues another key for an application, for platform administrators, so the application's replicas can move to it while the key they hold stays live. The request carries no body.\n\nAn application holds at most two live keys. A third is refused with `applicationKeyLimit` until one of the two live keys is revoked.\n\n`id` at the root of this answer is the new key's id, not the application's: the `{keyId}` revoking it, how `GET /admin/applications/{applicationId}` tells the application's keys apart, and `keyId` in the audit log. It never goes into the identity provider, a Bridge or a token. The application's id stays the `{applicationId}` in this operation's path, and the Bridge's `audience` and the identity provider's audience mapper do not change. `value` is in this answer alone, and goes straight into the deployment's secret store.\n\nThe audit event `applicationKey.issuance` records the issue.",
 				"operationId": "issueApplicationKey",
 				"parameters": [
 					{

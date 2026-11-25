@@ -75,18 +75,21 @@ deadline", answered in 42286 ms against its 4 s deadline (three runs of three al
 `src/store/databaseTls.database.test.ts`'s "takes a reissued CA certificate at the next connection",
 past its 10 s wait (two of two alone); and the harness start in
 `testing/harness/workerBridge.test.ts`, refused once for a store commit not answered within the
-store timeout (passing on its rerun). The cause they share is load on the test process: the chain
-runs every database suite at once, at Node's default file concurrency, eleven here against six CPUs
-for Docker and two on CI's pod, and the harness runs each Controller inside the test process, so a
-starved event loop fires the Controller's own timers late, its exchange deadline among them. The
-exchange's deadline does bound its wait for a pooled connection, since `withinStoreTimeout` arms it
-before asking the pool, so admission's 42 s is that starvation, not an unbounded wait. Each must
-pass under load as it does alone.
+store timeout (passing on its rerun), and its case at line 27, whose Bridge once missed its short
+wait for normal mode on the compressed profile (passing alone and on the rerun). The cause they
+share is load on the test process: the chain runs every database suite at once, at Node's default
+file concurrency, eleven here against six CPUs for Docker and two on CI's pod, and the harness runs
+each Controller inside the test process, so a starved event loop fires the Controller's own timers
+late, its exchange deadline among them. The exchange's deadline does bound its wait for a pooled
+connection, since `withinStoreTimeout` arms it before asking the pool, so admission's 42 s is that
+starvation, not an unbounded wait. It must pass deterministically.
 fix: every instance in the storeTimeout file now starts within four times the compressed store
 timeout, since an instance's whole start runs within its store timeout; bound the database suites'
 file concurrency in the chain to what the machine carries, give every other harness start a store
 timeout well above a loaded start except where a suite tests the timeout itself, confirm on CI's pod
-that each case passes, and establish the cause of any that still fails.
+that each case passes, and establish the cause of any that still fails. For the worker Bridge, wait
+on the start's own signal, or bound it like the other loaded harness starts, not a short fixed wait;
+prove it across repeated full runs.
 standalone: yes
 
 The test run's one Keycloak, which the global setup starts and every Keycloak suite shares, fails

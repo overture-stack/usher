@@ -46,53 +46,56 @@ the suites below already cover.
 
 The data is synthetic throughout, so reading records in full is fine.
 
-| Fixture              | What it is                                                                                                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The application      | Arranger's search server, registered in the Controller, its key held only in the deployment's secret store                                                                                       |
-| The resource         | One resource on the catalogue's resource field, access level `grant`, served by the application                                                                                                  |
-| The category         | `global.controlled`, defined in the catalogue's `auth.json` as a SQON condition on a keyword field that splits the records roughly in half                                                       |
-| Open catalogues      | Every other catalogue declared open in its `auth.json`                                                                                                                                           |
-| Roles                | One carrying `record.view`; one carrying `record.view` and `artifact.create`                                                                                                                     |
-| Test users           | Each self-registered with an address at a reserved domain, and verified through the mail catcher                                                                                                 |
-| The test application | `usher-tests`, registered in the Controller and kept across runs, its key in the deployment's secret store for the test runner alone, through which the tests exchange sign-in tokens themselves |
-| The test client      | A Keycloak client whose audience mapper puts `usher-tests` in `aud`, kept across runs                                                                                                            |
-| The directory client | The confidential client the Controller reads Keycloak's admin API through, configured with the deployment and never changed by a run                                                             |
-| Fresh accounts       | Self-registered as the test users are, one per case needing a person Usher has never met, since a person once met stays met                                                                      |
-| Test administrator   | A test user nominated as platform administrator for setup and teardown, kept for later runs and removed through `DELETE /admin/administrators/{subject}` once no longer needed                   |
+| Fixture              | What it is                                                                                                                                                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The application      | Arranger's search server, registered in the Controller, its key held only in the deployment's secret store                                                                                                                                                      |
+| The resource         | One resource on the catalogue's resource field, access level `grant`, served by the application                                                                                                                                                                 |
+| The category         | `global.controlled`, defined in the catalogue's `auth.json` as a SQON condition on a keyword field that splits the records roughly in half                                                                                                                      |
+| Open catalogues      | Every other catalogue declared open in its `auth.json`                                                                                                                                                                                                          |
+| Roles                | The seeded `viewer`: read and `artifact.create`, so its holder saves sets from what they read                                                                                                                                                                   |
+| Test users           | Each self-registered at a reserved domain, verified through the mail catcher, and signing in with OTP. The runner holds each password and OTP secret outside the repository. One sign-in per account per 30-second window, since Keycloak refuses a reused code |
+| The test application | `usher-tests`, registered in the Controller and kept across runs, its key in the deployment's secret store for the test runner alone, through which the tests exchange sign-in tokens themselves                                                                |
+| The test client      | A Keycloak client whose audience mapper puts `usher-tests` in `aud`, kept across runs; the client and its name are the deployment's to choose                                                                                                                   |
+| The directory client | The confidential client the Controller reads Keycloak's admin API through, configured with the deployment and never changed by a run                                                                                                                            |
+| Fresh accounts       | Self-registered as the test users are, one per case needing a person Usher has never met, since a person once met stays met                                                                                                                                     |
+| Test administrator   | A test user nominated as platform administrator for setup and teardown, kept for later runs and removed through `DELETE /admin/administrators/{subject}` once no longer needed                                                                                  |
+| Test owner           | `usher-test-owner`, an ordinary account, named owner of the resource by the test administrator and accepting. It makes the grants, since a platform administrator can't, owner or not: 403 `administratorGrantsNoConsumerAccess`                                |
 
-| Test user | Grants                                                                           |
-| --------- | -------------------------------------------------------------------------------- |
-| full      | `record.view` and `artifact.create` across the resource                          |
-| partial   | `record.view` across the resource, `artifact.create` only on `global.controlled` |
-| view-only | `record.view` across the resource                                                |
-| no-grants | none                                                                             |
+Each holder accepts their grant with the capabilities shown. `grantAutoAccept` stays `false`, so the
+answer step runs as real users meet it.
+
+| Test user | Grants, made by the test owner                                                                                                                       |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| full      | `viewer` on `global.unmarked` and on `global.controlled`, by email, so the directory's resolution of an address is exercised: `202` `grantByAddress` |
+| partial   | `viewer` on `global.controlled`, by subject: `201`                                                                                                   |
+| no-grants | none                                                                                                                                                 |
 
 ---
 
 ## Happy paths
 
-| Case                                                        | Expected                                                                                                             |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Each test user searches the catalogue                       | Records and counts match that user's grants, as a direct engine query with the same filter shows                     |
-| Anonymous search                                            | The open tier's answer                                                                                               |
-| full saves a set from any selection                         | Saved, attributed to them, and listed for them                                                                       |
-| partial saves a set from records inside `global.controlled` | Saved                                                                                                                |
-| A grant made through the Management API mid-run             | The next search answers with it, within the Bridge's notice latency                                                  |
-| A revocation made mid-run                                   | The next search answers without it, within the same latency                                                          |
-| Startup                                                     | The adapter's startup checks pass, and the log shows `access enforcement: on` and `server-side filter source: Usher` |
+| Case                                                        | Expected                                                                                                                                 |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Each test user searches the catalogue                       | Records and counts match that user's grants, as a direct engine query with the same filter shows; partial sees `global.controlled` alone |
+| Anonymous search                                            | The open tier's answer                                                                                                                   |
+| full saves a set from any selection                         | Saved, attributed to them, and listed for them                                                                                           |
+| partial saves a set from records inside `global.controlled` | Saved                                                                                                                                    |
+| A grant made through the Management API mid-run             | The next search answers with it, within the Bridge's notice latency                                                                      |
+| A revocation made mid-run                                   | The next search answers without it, within the same latency                                                                              |
+| Startup                                                     | The adapter's startup checks pass, and the log shows `access enforcement: on` and `server-side filter source: Usher`                     |
 
 ## Adversarial paths
 
-| Case                                                                                                                                                                     | Expected                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| partial saves a set from records outside `global.controlled`, by a narrow selection, by an empty filter, and by a selection sharing a saved value with an outside record | Refused, naming `artifact.create`, and nothing saved                                         |
-| view-only and no-grants save any set                                                                                                                                     | Refused, naming `artifact.create`                                                            |
-| A selection matching no records, by a user holding `artifact.create` nowhere                                                                                             | Refused                                                                                      |
-| A token from a client whose tokens lack the application's audience                                                                                                       | Treated as unconfirmed: searches from the open tier, everything else answered as unavailable |
-| A malformed, expired, unsigned or signed-out token                                                                                                                       | The same, and never data beyond the open tier                                                |
-| Reading another user's set by its id                                                                                                                                     | Answers exactly as a missing set                                                             |
-| Reading a set from another catalogue by its id                                                                                                                           | Answers exactly as a missing set                                                             |
-| Any refusal or error                                                                                                                                                     | No stack trace, internal hostname, file path or record value in the answer                   |
+| Case                                                                         | Expected                                                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| A set reaching records its creator may read but not save from                | Covered by Arranger's GraphQL router suite: no test user reads a record of the resource they can't save from |
+| no-grants saves any set                                                      | Refused, naming `artifact.create`                                                                            |
+| A selection matching no records, by a user holding `artifact.create` nowhere | Refused                                                                                                      |
+| A token from a client whose tokens lack the application's audience           | Treated as unconfirmed: searches from the open tier, everything else answered as unavailable                 |
+| A malformed, expired, unsigned or signed-out token                           | The same, and never data beyond the open tier                                                                |
+| Reading another user's set by its id                                         | Answers exactly as a missing set                                                                             |
+| Reading a set from another catalogue by its id                               | Answers exactly as a missing set                                                                             |
+| Any refusal or error                                                         | No stack trace, internal hostname, file path or record value in the answer                                   |
 
 ---
 
@@ -124,15 +127,19 @@ own cases, the first on an instance with no directory configured.
 
 ## Setup and teardown
 
-Setup runs in this order: the test users, the fresh accounts and the test administrator; the
-application, its key into the secret store; `usher-tests` and the test client, where they do not
-exist yet; the sign-in client's audience mapper; the category, the resource and the grants;
-the search engine privileges; then Arranger's `auth.json` files and settings, and a rollout.
+Setup runs in this order, each step skipped where it already holds:
 
-Teardown reverses it: Arranger's settings and files back, the audience mapper removed, and every
-nomination a run left pending revoked. The test users, their grants and the test administrator may
-stay for the next run. `usher-tests`, the test client and the directory client always stay: the
-first two are permanent fixtures, and the directory client is the deployment's configuration. A
-fresh account, once met, is never fresh again, so each run registers its own.
+1. the test administrator, nominated by an existing administrator and accepted;
+2. the test client and `usher-tests`;
+3. the category, then the resource with its serving application;
+4. the test owner, named and accepted;
+5. the grants, made and accepted;
+6. the search engine privileges.
+
+Arranger's `auth.json` files and settings are the deployment's configuration, set before a run.
+
+Teardown keeps the accounts, the test owner and the grants, and revokes only what a run added,
+such as a nomination left pending. A fresh account, once met, is never fresh again, so each run
+registers its own.
 
 Each run's requests are paced, capped in number, and limited to the stack under test.
