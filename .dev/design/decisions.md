@@ -56,9 +56,9 @@ enforcement path.
 
 A management UI ships in Cerbos Hub rather than the open-source product (see below).
 
-**Assessment status: not run.** The query-plan permission above satisfies the structured-output
-requirement. The three above are what remains to test, and they are read from Cerbos's
-documentation rather than from running it, checked on 2026-09-28 against v0.55.0.
+**Assessment status: not run.** Cerbos's query plan, described above, satisfies the
+structured-output requirement. The three above are what remains to test, and they are read from
+Cerbos's documentation rather than from running it, checked on 2026-09-28 against v0.55.0.
 
 ---
 
@@ -1304,9 +1304,10 @@ about a body of data.
 
 The case that produced this rule is a saved cohort. Such a record can carry the materialized
 identifier list and the query that selected it, and reading the record is not resolving it, so
-neither passes through data enforcement. Sharing one therefore discloses which principals share a
-clinical or genomic property, and what property, to someone who cannot retrieve a single one of
-those records. In this domain that is the disclosure rather than a step toward it.
+neither passes through data enforcement. Sharing one therefore discloses which of the people the
+records describe share a clinical or genomic property, and what property, to someone who cannot
+retrieve a single one of those records. In this domain that is the disclosure rather than a step
+toward it.
 
 **Holding a grant is permission to see data, not permission to republish something derived from
 it.** Those are different authorities, and the model already separates them: an owner sets a
@@ -1403,11 +1404,11 @@ exist in that mode, not a check that returns true. A check that passes because i
 missing looks like enforcement and is not, which is the same failure as a control named for a gate
 it does not implement.
 
-**The residual risk, which is accepted rather than solved.** Checking at share time keeps every
-read self-scoping, and means a share can outlive the governance that permitted it. That is the
-category-change propagation problem already open in the roadmap rather than a new one: when a
-resource's categories tighten, existing shares of artifacts derived from it need re-evaluation, and
-that belongs in the admin API rather than in a read-path filter.
+**Category changes reach existing artifacts by re-evaluation.** The read check compares the
+resources an artifact was built from with the resources held by its reader. When a resource's
+categories change, the artifacts built from it are re-evaluated against their readers' current
+grants. It is the roadmap's category-change propagation item, and the re-evaluation belongs in the
+admin API rather than in a read-path filter.
 
 ---
 
@@ -1465,11 +1466,12 @@ as engine-independent.
 **Two constraints that follow.**
 
 The value is produced by a named constructor, never written inline. The intent has to be visible in
-the type, because a literal empty array reads as a mistake and the natural cleanup of it is B.
+the type, because a literal empty array reads as a mistake, and the natural cleanup of it is a
+rewrite into a form that restricts nothing, such as a negation of an empty group.
 
 Its pinning test must assert the **emitted Elasticsearch**, and must assert the value survives a
 builder round-trip unchanged. A test on the SQON node shape alone would not have caught the failure
-that ruled out B.
+that ruled out a negation of an empty group.
 
 ---
 
@@ -2176,9 +2178,9 @@ by default across all instances.
 
 Access offered to an unregistered email address is an `invitations` row rather than a grant, and it
 remains unclaimed until that person registers. On registration the invitation becomes a grant under
-their Keycloak subject, unanswered, and follows the ordinary path from there. The two are different
-tables rather than two states of one thing, which is what keeps an unclaimed offer out of every
-query that reads grants.
+their subject at the identity provider, unanswered, and follows the ordinary path from there. The
+two are different tables rather than two states of one thing, which is what keeps an unclaimed offer
+out of every query that reads grants.
 
 **Tradeoffs accepted.** The acceptance step adds friction to the sharing workflow. This is
 intentional: the friction is the point. Instances that cannot tolerate it have the auto-accept
@@ -2259,9 +2261,9 @@ role row that cannot exist, since an unauthenticated request has no holder, and 
 it replaces filled tokens with a value held by nobody.
 
 An instance configures a **baseline** whose grants are the floor for every principal, applied
-whether or not a principal is authenticated. Open access is what that role ordinarily grants, and an
-authenticated principal's grants are this baseline together with their own rather than an alternative
-to it.
+whether or not a principal is authenticated. Open access is what the baseline ordinarily grants, and
+an authenticated principal's grants are this baseline together with their own rather than an
+alternative to it.
 
 **It cannot be a role, and the reason is structural rather than stylistic.** A role attaches to a
 holder, every holder is a user or a group, and an unauthenticated request has no `sub` at all. There
@@ -2272,8 +2274,8 @@ grants because it emits ordinary grant entries.
 
 **A name has now been invented for that gap twice.** The synthetic `public` role was
 retired for filling a token field with a value held by nobody. `anonymous role` fills no field and is
-not synthetic in that sense, so the sentence below stands as written. It went wrong on the other
-axis: it called the configuration a role.
+not synthetic in that sense, so the objection to `public` does not reach it. It went wrong on the
+other axis: it called the configuration a role.
 
 **It may grant nothing.** The baseline is the rule behind a resource's open setting: it gives every
 principal the `unmarked` grant on each resource whose unmarked records are open. Where it grants
@@ -2998,7 +3000,7 @@ This defends nothing. Without it, each instance's operators run a separate studi
 service to orchestrate resources, and downstream services keep resource registries of their own.
 
 Usher's scope extends beyond access decisions to owning the full lifecycle of the resources it
-protects: creation, metadata management, assigning roles, category association, base tier,
+protects: registration, metadata management, assigning roles, category association, base tier,
 suppression, and retirement.
 
 Previously, a separate "studies management service" handled this orchestration on top of EGO.
@@ -3028,7 +3030,7 @@ resource metadata (cohort names, category assignments, ownership, or who holds r
 
 Previously, the studies management service used SONG as the authoritative record of which studies
 existed. This created a dependency on SONG for access decisions, and excluded instances
-that do not run SONG. Usher owns resource metadata instead: when a resource is created (either by
+that do not run SONG. Usher owns resource metadata instead: when a resource is registered (either by
 an admin or by the Lyric service account at submission time), Usher is the record of that
 resource's existence, name, and category assignments.
 

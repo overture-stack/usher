@@ -316,7 +316,7 @@ to whichever service offers it, so Usher ships a vocabulary of them as defaults 
 add to it.
 
 **The entity decides the plane, not the action.** `record.update` is data plane and
-`resource.update` is control plane, and both are "update". The baseline vocabulary and the reasoning
+`resource.update` is control plane, and both are "update". The shipped vocabulary and the reasoning
 behind each entry are in [permissions-model.md](permissions-model.md).
 
 **Capability group**
