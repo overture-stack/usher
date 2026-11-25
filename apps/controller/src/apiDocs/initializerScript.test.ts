@@ -50,8 +50,13 @@ const run = (script: string): Started => {
 	return started;
 };
 
-// The options given, without the plugins, which are functions and are tested by what they do.
-const withoutPlugins = ({ plugins: _plugins, ...options }: Record<string, unknown>): Record<string, unknown> => options;
+// The options given, without the plugins and the request interceptor, which are functions and are
+// tested by what they do.
+const withoutPlugins = ({
+	plugins: _plugins,
+	requestInterceptor: _requestInterceptor,
+	...options
+}: Record<string, unknown>): Record<string, unknown> => options;
 
 // A stand-in for Swagger UI's system, its contract naming the sign-in scheme's end-session endpoint
 // where one is given.
@@ -82,7 +87,7 @@ const signOut = (started: Started, names: unknown, endSession?: string): { forgo
 };
 
 suite('the API documentation initializer', () => {
-	test('starts Swagger UI once, on the page element, from the served contract, with its base layout, the API preset alone and one plugin', () => {
+	test('starts Swagger UI once, on the page element, from the served contract, with its base layout, the API preset alone, one plugin and a request interceptor', () => {
 		const { options } = run(initializerScript('usher-ui'));
 
 		assert.equal(options.length, 1);
@@ -97,6 +102,7 @@ suite('the API documentation initializer', () => {
 			validatorUrl: null,
 		});
 		assert.equal((options[0]?.['plugins'] as readonly unknown[]).length, 1);
+		assert.equal(typeof options[0]?.['requestInterceptor'], 'function');
 	});
 
 	test('builds the redirect URL in the browser, from the origin the page is served at', () => {
@@ -201,5 +207,374 @@ suite("the API documentation page's sign-out", () => {
 			outcomes,
 			cases.map(({ names }) => ({ assigned: [], forgotten: [names] })),
 		);
+	});
+});
+
+const TOKEN_ENDPOINT = 'https://auth.example.org/realms/test/protocol/openid-connect/token';
+
+// What one sign-in through the scheme leaves in Swagger UI's state, as the identity provider answers
+// the authorization code flow.
+const signedIn = (token: Record<string, unknown>): Record<string, unknown> => ({
+	clientId: 'usher-ui',
+	name: SIGN_IN_SCHEME,
+	schema: { flow: 'authorizationCode', tokenUrl: TOKEN_ENDPOINT, type: 'oauth2' },
+	token,
+});
+
+const FIRST_TOKEN = { access_token: 'first-access', expires_in: 300, refresh_token: 'first-refresh' };
+
+const RENEWED_TOKEN = { access_token: 'renewed-access', expires_in: 300, refresh_token: 'renewed-refresh' };
+
+interface Timer {
+	callback: () => void;
+	delay: number;
+	id: number;
+}
+
+interface TokenRequest {
+	body: string;
+	headers: Record<string, string>;
+	method: string;
+	url: string;
+}
+
+type TokenAnswer = { body: unknown; status: number } | 'unreachable';
+
+type Authorize = (payload: { auth: Record<string, unknown>; token: Record<string, unknown> }) => unknown;
+
+interface SessionPlugin {
+	statePlugins: {
+		auth: {
+			wrapActions: { authorizeOauth2: (original: Authorize) => Authorize; logout: (original: Logout) => Logout };
+		};
+	};
+}
+
+interface InterceptedRequest {
+	headers: Record<string, string>;
+	url: string;
+}
+
+// A page as a browser runs it, with its clock, timers and connections in the test's hands, and
+// Swagger UI's state for the sign-in scheme held as the bundle holds it.
+const page = (answers: TokenAnswer[] = []) => {
+	const clock = { now: 1_000_000 };
+	const timers: Timer[] = [];
+	const cleared: number[] = [];
+	const assigned: string[] = [];
+	const requests: TokenRequest[] = [];
+	const state: { authorized: Record<string, Record<string, unknown>> } = { authorized: {} };
+	const pending = [...answers];
+	const window = {
+		clearTimeout: (id: number) => {
+			cleared.push(id);
+		},
+		fetch: async (
+			url: string,
+			init: { body: URLSearchParams; headers: Record<string, string>; method: string },
+		) => {
+			requests.push({ body: init.body.toString(), headers: init.headers, method: init.method, url });
+			const answer = pending.shift() ?? 'unreachable';
+			if (answer === 'unreachable') {
+				throw new TypeError('Failed to fetch');
+			}
+			return {
+				json: async () => answer.body,
+				ok: answer.status >= 200 && answer.status < 300,
+				status: answer.status,
+			};
+		},
+		location: {
+			assign: (address: string) => {
+				assigned.push(address);
+			},
+			origin: PAGE_ORIGIN,
+		},
+		setTimeout: (callback: () => void, delay: number) => {
+			const id = timers.length + 1;
+			timers.push({ callback, delay, id });
+			return id;
+		},
+	};
+	const options: Record<string, unknown>[] = [];
+	const bundle = Object.assign(
+		(given: Record<string, unknown>) => {
+			options.push(given);
+			return { initOAuth: () => undefined };
+		},
+		{ presets: { apis: API_PRESET } },
+	);
+	new Function('SwaggerUIBundle', 'window', 'Date', initializerScript('usher-ui'))(bundle, window, {
+		now: () => clock.now,
+	});
+	const plugins = options[0]?.['plugins'];
+	const plugin = (Array.isArray(plugins) ? plugins[0] : undefined) as
+		((system: unknown) => SessionPlugin) | undefined;
+	const actions: { authorizeOauth2: Authorize; logout: Logout } = {
+		authorizeOauth2: () => undefined,
+		logout: () => undefined,
+	};
+	const system = {
+		authActions: {
+			authorizeOauth2: (payload: Parameters<Authorize>[0]) => actions.authorizeOauth2(payload),
+			logout: (names: unknown) => actions.logout(names),
+		},
+		authSelectors: { authorized: () => ({ toJS: () => structuredClone(state.authorized) }) },
+		specSelectors: systemWith(END_SESSION_ENDPOINT).specSelectors,
+	};
+	const wraps = (plugin ?? assert.fail('no plugin'))(system).statePlugins.auth.wrapActions;
+	actions.authorizeOauth2 = wraps.authorizeOauth2(({ auth, token }) => {
+		state.authorized = { ...state.authorized, [String(auth['name'])]: { ...auth, token: { ...token } } };
+	});
+	actions.logout = wraps.logout((names) => {
+		state.authorized = Object.fromEntries(
+			Object.entries(state.authorized).filter(([name]) => !(Array.isArray(names) && names.includes(name))),
+		);
+	});
+	const interceptor = options[0]?.['requestInterceptor'] as
+		((request: InterceptedRequest) => InterceptedRequest | Promise<InterceptedRequest>) | undefined;
+	return {
+		assigned,
+		cleared,
+		clock,
+		intercept: async (request: InterceptedRequest) => (interceptor ?? assert.fail('no interceptor'))(request),
+		requests,
+		authorize: (auth: Record<string, unknown>, token: Record<string, unknown>) =>
+			system.authActions.authorizeOauth2({ auth, token }),
+		signIn: (token: Record<string, unknown>) => system.authActions.authorizeOauth2({ auth: signedIn({}), token }),
+		signOut: (names: unknown) => system.authActions.logout(names),
+		state,
+		// Fires the newest timer and waits for whatever it started to settle.
+		async fire(): Promise<void> {
+			(timers.at(-1) ?? assert.fail('no timer')).callback();
+			await new Promise((resolve) => setImmediate(resolve));
+		},
+		timers,
+	};
+};
+
+const heldToken = (state: { authorized: Record<string, Record<string, unknown>> }): unknown =>
+	state.authorized[SIGN_IN_SCHEME]?.['token'];
+
+suite("the API documentation page's renewal of a sign-in", () => {
+	test('sets a renewal for 30 seconds before the token lapses once someone signs in', () => {
+		const signed = page();
+
+		signed.signIn(FIRST_TOKEN);
+
+		assert.deepEqual(
+			signed.timers.map(({ delay }) => delay),
+			[270_000],
+		);
+	});
+
+	test('sets the renewal halfway through the life of a token living under a minute', () => {
+		const signed = page();
+
+		signed.signIn({ ...FIRST_TOKEN, expires_in: 40 });
+
+		assert.deepEqual(
+			signed.timers.map(({ delay }) => delay),
+			[20_000],
+		);
+	});
+
+	test("asks the identity provider's token endpoint for a new token with the refresh token held, naming the client, by POST, with nothing in the address", async () => {
+		const signed = page([{ body: RENEWED_TOKEN, status: 200 }]);
+		signed.signIn(FIRST_TOKEN);
+
+		await signed.fire();
+
+		assert.equal(signed.requests.length, 1);
+		const [request] = signed.requests;
+		assert.equal(request?.url, TOKEN_ENDPOINT);
+		assert.equal(request?.method, 'POST');
+		assert.equal(request?.headers['Content-Type'], 'application/x-www-form-urlencoded');
+		assert.deepEqual(Object.fromEntries(new URLSearchParams(request?.body)), {
+			client_id: 'usher-ui',
+			grant_type: 'refresh_token',
+			refresh_token: 'first-refresh',
+		});
+	});
+
+	test('holds the renewed token in place of the first, and sets the next renewal from its life', async () => {
+		const signed = page([{ body: RENEWED_TOKEN, status: 200 }]);
+		signed.signIn(FIRST_TOKEN);
+
+		await signed.fire();
+
+		assert.deepEqual(heldToken(signed.state), RENEWED_TOKEN);
+		assert.deepEqual(
+			signed.timers.map(({ delay }) => delay),
+			[270_000, 270_000],
+		);
+		assert.deepEqual(signed.assigned, []);
+	});
+
+	test('keeps the refresh token held when the renewed token comes without one', async () => {
+		const signed = page([{ body: { access_token: 'renewed-access', expires_in: 300 }, status: 200 }]);
+		signed.signIn(FIRST_TOKEN);
+
+		await signed.fire();
+
+		assert.deepEqual(heldToken(signed.state), {
+			access_token: 'renewed-access',
+			expires_in: 300,
+			refresh_token: 'first-refresh',
+		});
+	});
+
+	test('shows the person signed out, staying on the page, when the identity provider refuses the renewal, cannot be reached, or answers without a token', async () => {
+		const answers: TokenAnswer[] = [
+			{ body: { error: 'invalid_grant' }, status: 400 },
+			'unreachable',
+			{ body: { expires_in: 300 }, status: 200 },
+			{ body: 'not a token', status: 200 },
+		];
+
+		const outcomes = await Promise.all(
+			answers.map(async (answer) => {
+				const signed = page([answer]);
+				signed.signIn(FIRST_TOKEN);
+				await signed.fire();
+				return { assigned: signed.assigned, held: heldToken(signed.state) };
+			}),
+		);
+
+		assert.deepEqual(
+			outcomes,
+			answers.map(() => ({ assigned: [], held: undefined })),
+		);
+	});
+
+	test('shows the person signed out when the token lapses holding no refresh token, asking nothing of the identity provider', async () => {
+		const signed = page();
+		signed.signIn({ access_token: 'first-access', expires_in: 300 });
+
+		await signed.fire();
+
+		assert.deepEqual(signed.requests, []);
+		assert.equal(heldToken(signed.state), undefined);
+		assert.deepEqual(signed.assigned, []);
+	});
+
+	test('sets no renewal, and changes no request, for a token naming no positive life', async () => {
+		const lives = [undefined, 0, -5, '300'];
+
+		const outcomes = await Promise.all(
+			lives.map(async (life) => {
+				const signed = page([{ body: RENEWED_TOKEN, status: 200 }]);
+				signed.signIn({ access_token: 'first-access', expires_in: life, refresh_token: 'first-refresh' });
+				signed.clock.now += 3_600_000;
+				const sent = await signed.intercept({
+					headers: { Authorization: 'Bearer first-access' },
+					url: `${PAGE_ORIGIN}/admin/me/grants`,
+				});
+				return { requests: signed.requests.length, sent: sent.headers, timers: signed.timers.length };
+			}),
+		);
+
+		assert.deepEqual(
+			outcomes,
+			lives.map(() => ({ requests: 0, sent: { Authorization: 'Bearer first-access' }, timers: 0 })),
+		);
+	});
+
+	test('sets no renewal for a sign-in through another scheme', () => {
+		const signed = page();
+
+		signed.authorize({ ...signedIn({}), name: 'managementToken' }, FIRST_TOKEN);
+
+		assert.deepEqual(signed.timers, []);
+	});
+
+	test("cancels the renewal set when the person signs out, and still ends the identity provider's session", () => {
+		const signed = page();
+		signed.signIn(FIRST_TOKEN);
+
+		signed.signOut([SIGN_IN_SCHEME]);
+
+		assert.deepEqual(signed.cleared, [1]);
+		assert.equal(signed.assigned.length, 1);
+	});
+
+	test('cancels the renewal set before when the person signs in again', () => {
+		const signed = page();
+		signed.signIn(FIRST_TOKEN);
+
+		signed.signIn(RENEWED_TOKEN);
+
+		assert.deepEqual(signed.cleared, [1]);
+		assert.equal(signed.timers.length, 2);
+	});
+
+	test('renews first, then sends a request carrying the held token once its renewal is due, as after a sleeping tab', async () => {
+		const signed = page([{ body: RENEWED_TOKEN, status: 200 }]);
+		signed.signIn(FIRST_TOKEN);
+		signed.clock.now += 290_000;
+
+		const sent = await signed.intercept({
+			headers: { Authorization: 'Bearer first-access' },
+			url: `${PAGE_ORIGIN}/admin/me/grants`,
+		});
+
+		assert.equal(signed.requests.length, 1);
+		assert.equal(sent.headers['Authorization'], 'Bearer renewed-access');
+	});
+
+	test('sends a request unchanged while the held token is not yet due for renewal, or when it carries no held token', async () => {
+		const signed = page([{ body: RENEWED_TOKEN, status: 200 }]);
+		signed.signIn(FIRST_TOKEN);
+		const early = await signed.intercept({
+			headers: { Authorization: 'Bearer first-access' },
+			url: `${PAGE_ORIGIN}/admin/me/grants`,
+		});
+		signed.clock.now += 290_000;
+
+		const others = await Promise.all([
+			signed.intercept({ headers: {}, url: TOKEN_ENDPOINT }),
+			signed.intercept({
+				headers: { Authorization: 'Bearer typed-by-hand' },
+				url: `${PAGE_ORIGIN}/admin/me/grants`,
+			}),
+		]);
+
+		assert.deepEqual(early.headers, { Authorization: 'Bearer first-access' });
+		assert.deepEqual(
+			others.map(({ headers }) => headers),
+			[{}, { Authorization: 'Bearer typed-by-hand' }],
+		);
+		assert.deepEqual(signed.requests, []);
+	});
+
+	test('sends a due request with no token once its renewal fails, showing the person signed out', async () => {
+		const signed = page([{ body: { error: 'invalid_grant' }, status: 400 }]);
+		signed.signIn(FIRST_TOKEN);
+		signed.clock.now += 290_000;
+
+		const sent = await signed.intercept({
+			headers: { Authorization: 'Bearer first-access' },
+			url: `${PAGE_ORIGIN}/admin/me/grants`,
+		});
+
+		assert.deepEqual(sent.headers, {});
+		assert.equal(heldToken(signed.state), undefined);
+	});
+
+	test('asks for one renewal when the renewal set and a request fall due together', async () => {
+		const signed = page([{ body: RENEWED_TOKEN, status: 200 }]);
+		signed.signIn(FIRST_TOKEN);
+		signed.clock.now += 290_000;
+
+		const [, sent] = await Promise.all([
+			signed.fire(),
+			signed.intercept({
+				headers: { Authorization: 'Bearer first-access' },
+				url: `${PAGE_ORIGIN}/admin/me/grants`,
+			}),
+		]);
+
+		assert.equal(signed.requests.length, 1);
+		assert.equal(sent.headers['Authorization'], 'Bearer renewed-access');
 	});
 });
