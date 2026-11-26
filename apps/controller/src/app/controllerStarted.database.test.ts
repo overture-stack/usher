@@ -32,7 +32,7 @@ const startRows = async (harness: Harness): Promise<number> =>
 	(await auditRows(harness.clients.migration)).filter(({ type }) => type === emittedType(CONTROLLER_STARTED)).length;
 
 suite("a controller's start logging controller.started", () => {
-	test('writes exactly one controller.started line at info, naming the host, port and instance it listens on, and no audit row', async (context) => {
+	test('writes exactly one controller.started line at info, naming the host, port and instance it listens on, no revision while none is set, and no audit row', async (context) => {
 		const log = captureLog();
 		const harness = await startHarness({
 			applications: [],
@@ -52,6 +52,23 @@ suite("a controller's start logging controller.started", () => {
 			time: lines[0]?.time,
 		});
 		assert.equal(await startRows(harness), 0);
+	});
+
+	test('names the revision it runs in the start line while one is set', async (context) => {
+		const log = captureLog();
+		const revision = '6f976d8a0b1c2d3e4f5061728394a5b6c7d8e9f0';
+		const harness = await startHarness({
+			applications: [],
+			configuration: { logStream: log.stream, revision },
+		});
+		cleanupFor(context).defer(() => harness.stop());
+
+		const lines = await awaitStartLines(log, harness.configuration.instanceName);
+
+		assert.deepEqual(
+			lines.map((line) => line.revision),
+			[revision],
+		);
 	});
 
 	test('writes the start line under a role that may only read, naming its own instance', async (context) => {

@@ -227,6 +227,12 @@ export interface ControllerSettings {
 	retentionMarginSeconds: number;
 
 	/**
+	 * The build the Controller runs, which its `controller.started` line names
+	 * (`docs/deployment.md` § This instance and its events); empty for none, as a harness's start gives.
+	 */
+	revision: string;
+
+	/**
 	 * The longest a self-grant may last, in seconds, from the instant it is asked for: 86,400 by
 	 * default (`docs/deployment.md` § Settings). An owner's self-grant and a platform
 	 * administrator's request are held to it, and so is a change to a self-grant's end. A setting
@@ -717,6 +723,7 @@ const VARIABLE_NAMES: Readonly<Record<FieldWithVariable, string>> = {
 	managementAudience: 'USHER_MANAGEMENT_AUDIENCE',
 	managementClients: 'USHER_MANAGEMENT_CLIENTS',
 	port: 'USHER_PORT',
+	revision: 'USHER_REVISION',
 	serviceAccountRole: 'USHER_SERVICE_ACCOUNT_ROLE',
 	storeTimeoutMilliseconds: 'USHER_STORE_TIMEOUT_MILLISECONDS',
 	trustedProxies: 'USHER_TRUSTED_PROXIES',
@@ -804,6 +811,7 @@ export const environmentFor = ({
 	managementAudience,
 	managementClients,
 	port,
+	revision,
 	serviceAccountRole,
 	storeTimeoutMilliseconds,
 	trustedProxies,
@@ -828,6 +836,7 @@ export const environmentFor = ({
 	[VARIABLE_NAMES.managementAudience]: managementAudience,
 	[VARIABLE_NAMES.managementClients]: managementClients.join(','),
 	[VARIABLE_NAMES.port]: String(port),
+	[VARIABLE_NAMES.revision]: revision,
 	[VARIABLE_NAMES.serviceAccountRole]: serviceAccountRole,
 	[VARIABLE_NAMES.storeTimeoutMilliseconds]: String(storeTimeoutMilliseconds),
 	[VARIABLE_NAMES.trustedProxies]: trustedProxies.join(','),

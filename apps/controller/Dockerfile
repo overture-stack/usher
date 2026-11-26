@@ -75,6 +75,13 @@ COPY --from=build /deploy/package.json ./
 COPY --from=build /deploy/node_modules ./node_modules
 COPY --from=build /deploy/dist ./dist
 
+# The commit the image is built from, given as the COMMIT build argument: it sets the revision label
+# and the start line's revision, and stays empty for a local build. Declared after every copy, so a
+# new commit rebuilds no earlier layer.
+ARG COMMIT=""
+LABEL org.opencontainers.image.revision="${COMMIT}"
+ENV USHER_REVISION="${COMMIT}"
+
 USER 65532:65532
 
 ENTRYPOINT ["/nodejs/bin/node"]

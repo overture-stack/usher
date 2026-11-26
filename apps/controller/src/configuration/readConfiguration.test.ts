@@ -92,6 +92,7 @@ suite('reading the configuration from an environment', () => {
 				directoryClientSecret: DIRECTORY_SECRET,
 				directoryRealm: 'overture',
 				directoryUrl: 'https://auth.example.org',
+				revision: '6f976d8a0b1c2d3e4f5061728394a5b6c7d8e9f0',
 				serviceAccountRole: 'ims-usher-service',
 				storeTimeoutMilliseconds: '250',
 				trustedProxies: '127.0.0.1,::1',
@@ -119,6 +120,7 @@ suite('reading the configuration from an environment', () => {
 			managementAudience: 'usher-management',
 			managementClients: ['usher-ui'],
 			port: 8443,
+			revision: '6f976d8a0b1c2d3e4f5061728394a5b6c7d8e9f0',
 			serviceAccountRole: 'ims-usher-service',
 			storeTimeoutMilliseconds: 250,
 			trustedProxies: ['127.0.0.1', '::1'],
@@ -138,6 +140,7 @@ suite('reading the configuration from an environment', () => {
 				directoryClientSecret: configuration.directoryClientSecret,
 				directoryRealm: configuration.directoryRealm,
 				directoryUrl: configuration.directoryUrl,
+				revision: configuration.revision,
 				serviceAccountRole: configuration.serviceAccountRole,
 				storeTimeoutMilliseconds: configuration.storeTimeoutMilliseconds,
 				trustedProxies: configuration.trustedProxies,
@@ -151,10 +154,22 @@ suite('reading the configuration from an environment', () => {
 				directoryClientSecret: '',
 				directoryRealm: '',
 				directoryUrl: '',
+				revision: '',
 				serviceAccountRole: 'usher-service-account',
 				storeTimeoutMilliseconds: 5000,
 				trustedProxies: [],
 			},
+		);
+	});
+
+	test('reads the revision with whitespace around it left out, and none when unset, empty or blank', () => {
+		assert.equal(
+			readConfiguration(environmentWith({ revision: ' 6f976d8a0b1c2d3e4f5061728394a5b6c7d8e9f0\n' })).revision,
+			'6f976d8a0b1c2d3e4f5061728394a5b6c7d8e9f0',
+		);
+		assert.deepEqual(
+			[undefined, '', ' \t'].map((revision) => readConfiguration(environmentWith({ revision })).revision),
+			['', '', ''],
 		);
 	});
 

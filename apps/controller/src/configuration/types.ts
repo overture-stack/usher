@@ -113,6 +113,9 @@ export interface ControllerConfiguration {
 	/** The port the Controller listens on; 0 asks for any free port. */
 	port: number;
 
+	/** The build the Controller runs, such as its image's commit, trimmed; empty, the default, for none. Only the `controller.started` line reads it. */
+	revision: string;
+
 	/**
 	 * The identity provider realm role marking its holder's token as a service account's,
 	 * `usher-service-account` by default; the start refuses it when it names the first user's realm role.

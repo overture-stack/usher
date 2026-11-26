@@ -520,6 +520,7 @@ export const createController = (configuration: ControllerConfiguration): Contro
 				host: bound.address,
 				instance: configuration.instanceName,
 				port: bound.port,
+				...(configuration.revision === '' ? {} : { revision: configuration.revision }),
 			});
 		}
 		return { url };

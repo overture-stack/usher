@@ -25,6 +25,7 @@ export const ENVIRONMENT_VARIABLES: Readonly<Record<FieldWithVariable, string>> 
 	managementAudience: 'USHER_MANAGEMENT_AUDIENCE',
 	managementClients: 'USHER_MANAGEMENT_CLIENTS',
 	port: 'USHER_PORT',
+	revision: 'USHER_REVISION',
 	serviceAccountRole: 'USHER_SERVICE_ACCOUNT_ROLE',
 	storeTimeoutMilliseconds: 'USHER_STORE_TIMEOUT_MILLISECONDS',
 	trustedProxies: 'USHER_TRUSTED_PROXIES',

@@ -124,6 +124,9 @@ export const readConfiguration = (environment: ConfigurationEnvironment): Contro
 		managementAudience: readText(variable('managementAudience')),
 		managementClients,
 		port: readInteger(variable('port'), { maximum: 65_535, minimum: 0 }),
+		revision: then(readText(variable('revision'), { emptyAllowed: true, fallback: '' }), (revision) =>
+			read(revision.trim()),
+		),
 		serviceAccountRole: readText(variable('serviceAccountRole'), {
 			fallback: 'usher-service-account',
 		}),
@@ -165,6 +168,7 @@ export const readConfiguration = (environment: ConfigurationEnvironment): Contro
 			managementAudience: valueOf(readings.managementAudience),
 			managementClients: valueOf(readings.managementClients),
 			port: valueOf(readings.port),
+			revision: valueOf(readings.revision),
 			serviceAccountRole: valueOf(readings.serviceAccountRole),
 			storeTimeoutMilliseconds: valueOf(readings.storeTimeoutMilliseconds),
 			trustedProxies: valueOf(readings.trustedProxies),
