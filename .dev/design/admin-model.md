@@ -2,7 +2,7 @@
 
 _Status: in progress. OIDC-first admin identification, role taxonomy, bootstrap, self-grant
 flow, admin listing visibility, service accounts, and audit integrity are documented. Open
-design questions: self-grant step-up authentication, how a self-grant's owner notice is delivered, "list all
+design questions: how a self-grant's owner notice is delivered, "list all
 users" scope and PHI implications, break-glass emergency access, rogue admin peer-grant impact,
 and the Custodian permission list. The audit event schema is no longer among them: it is specced
 in [audit-events.md](audit-events.md)._
@@ -272,15 +272,31 @@ A policy option that restricts self-grant revocation to the creator only is poss
 decided. See the open questions section; the admin API is built on the current default, any admin
 revoking any grant.
 
-### Compensating controls and their dependency
+### Self-grant step-up authentication
 
-Two controls mitigate the risk of unchecked self-grant: step-up authentication (MFA re-prompt
-at point of self-grant) and resource owner notification (out-of-band alert to the owner when an
-admin self-grants access to their resource).
+A self-grant granted at once needs a recent step-up: a sign-in at the realm's stronger level, which
+the realm calls `confirmation`, within the instance's window. That is an owner's self-grant, and the only live
+administrator's on a resource with no counted owner. A counted owner extending or widening a grant
+they hold needs one too. A self-grant asked for as a request, which someone else decides, needs
+none.
 
-These are not independent. If step-up authentication is deferred to a later version, owner
-notification is required for v1 as the primary compensating control. Both cannot be deferred
-simultaneously. This dependency must be resolved as a v1 design decision.
+- **What counts.** The management token's `acr` equals the `stepUpLevel` setting, compared
+  exactly, and its `auth_time` falls within `stepUpWindowSeconds` before the request, each edge
+  widened by the Controller's clock tolerance of 30 seconds. The first sign-in carries the realm's
+  ordinary level, so it never counts.
+- **Within the window**, every such request is taken under one step-up, since the Controller
+  reads only the token.
+- **Without one**, the request is refused `401` `stepUpRequired`, and `WWW-Authenticate` names
+  the level and the window as RFC 9470 does:
+  `Bearer error="insufficient_user_authentication", acr_values="<level>", max_age=<window>`. The
+  management UI signs the person in again with those values, then sends the request again. The
+  check comes after every other rule and before anything is written, and the refusal is recorded at
+  `denied` as the operation's other refusals are.
+- **The settings.** `stepUpLevel` defaults to `confirmation`, the realm's name for its stronger level, and is fixed after the first run;
+  an ordinary sign-in's level, `0`, `1` or `signin`, is refused as its value. `stepUpWindowSeconds`
+  takes 1 to 3600 and defaults to 300. No setting turns the check off.
+
+Each other owner of the resource is also told of the self-grant, as the open questions below record.
 
 ---
 
@@ -594,10 +610,9 @@ policy bundle updates across many enforcement points simultaneously.
 
 The following require deliberate decisions before the relevant implementation work begins.
 
-**Self-grant step-up authentication:** should initiating a self-grant require MFA
-re-authentication? NIST SP 800-63B recommends step-up for high-impact operations. Recommended:
-yes. Defer to v1+ only if owner notification (below) is implemented in v1 as the compensating
-control.
+**Self-grant step-up authentication (decided):** a self-grant granted at once needs a sign-in at
+the realm's step-up level within the instance's window, as § Self-grant step-up authentication
+states.
 
 **Self-grant owner notification (decided):** each other owner of a resource is told of an owner's
 self-grant on it, and each owner is told of a platform administrator's request for one, as

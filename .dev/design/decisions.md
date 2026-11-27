@@ -2636,6 +2636,37 @@ decided by another administrator or by an owner the resource gains: without it, 
 left is either unreachable or open to one administrator acting alone. Ruled by the developer
 2026-11-25.
 
+**On a resource with a counted owner, an administrator issues only `submitter` and `owner` grants.**
+Any other role is refused with `403` `administratorGrantsNoConsumerAccess`, whether the grant is
+created or an existing one is extended or widened.
+
+---
+
+### A self-grant granted at once needs a recent step-up
+
+A self-grant granted at once takes effect with nobody else deciding, so the person making it signs in
+again at the stronger level.
+
+**Ruled by the developer 2026-11-26.** A self-grant granted at once, an owner's or the only live
+administrator's, needs a sign-in at the realm's step-up level within the instance's
+window, and so does a counted owner extending or widening a grant they hold. The Controller reads the
+level from the management token's `acr` and the sign-in's time from its `auth_time`. An ordinary
+sign-in never counts, and within the window one step-up serves every such request. Without one
+the request is refused `401` `stepUpRequired`, with RFC 9470's
+`WWW-Authenticate: Bearer error="insufficient_user_authentication"` naming the level as `acr_values`
+and the window as `max_age`. A self-grant asked for as a request needs none, since someone else
+decides it.
+
+- **The check is judged last and before any write**, so a person signs in again only for a request
+  nothing else refuses, and a refusal leaves nothing behind.
+- **The level and the window are stored settings**, so every Controller instance judges alike. The
+  level is fixed after the first run, since an administrator it governs could otherwise change it,
+  and refuses an ordinary sign-in's level. The window runs from 1 second to an hour, 300 by default.
+- **One judgement, `judgeStepUp`, takes the principal and the settings**, so another operation
+  taking effect at once can require the same step-up without rework.
+
+The rule is stated in [admin-model.md](admin-model.md) § Self-grant step-up authentication.
+
 ---
 
 ### Granting is one function, and the data's restrictions are the last gate

@@ -63,6 +63,12 @@ count is returned as the engine computes it, including one.
 **Any protection here costs the interface its exact small numbers**, and only for principals served
 counts without records, since one who can view the records can count them.
 
+**An aggregation returning whole records stays under the `record.view` filter.** Arranger's bucket
+`top_hits` returns whole records from inside an aggregation. Where a principal holding
+`record.count` without `record.view` gets a wider filter on the aggregations read path than on hits,
+`top_hits` is either not served on that path or keeps the `record.view` filter itself. Today
+aggregations and hits share the `record.view` filter.
+
 ## Rules recommended and not adopted
 
 | Rule                                                                                                                                                                       | Why                                                                                             |

@@ -137,7 +137,6 @@ developer in isolation.
 | ~~JWE algorithm selection~~ settled: `dir` with A256GCM, per-application symmetric key | [security-threat-model.md](security-threat-model.md) | Token issuance implementation |
 | Role permission definitions: what actions does each role permit beyond resource access? | [permissions-model.md](permissions-model.md) | Constraint resolution; management UI |
 | Self-grant peer revocability: can any admin revoke a peer's self-grant, or only the creator? | [admin-model.md](admin-model.md) | Admin API grant management endpoints |
-| Self-grant compensating controls: step-up auth and owner notification cannot both be deferred to v1+ | [admin-model.md](admin-model.md) | Self-grant UX; notification infrastructure |
 | "List all users" permission: scoped-to-resource direction agreed; global directory requires deliberate PHI decision | [admin-model.md](admin-model.md) | Admin API design |
 | Break-glass emergency access: a standard operating procedure (SOP) for when all admins are unavailable | [admin-model.md](admin-model.md) | Deployment SOPs |
 

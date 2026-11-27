@@ -15,7 +15,7 @@ Architectural diagram showing Usher's connections to Overture services and infra
 
 ### Admin model: open questions
 
-Four items stay open: self-grant compensating controls, self-grant peer revocability, the break-glass procedure, and where an adapter learns that a principal is an administrator (Usher's own role, adapter-side config, or the platform access model, and whether an administrator of an ushered application is the same principal as an administrator of Usher). The last one also gates the bypass audit requirement, since a bypass cannot be logged as such until its source is defined. Lower-priority follow-ups (step-up auth, audit schema, multi-tenancy) can trail v1. See [admin model open questions](docs/atlas/roadmap/admin-model-open-questions.md).
+Three items stay open: self-grant peer revocability, the break-glass procedure, and where an adapter learns that a principal is an administrator (Usher's own role, adapter-side config, or the platform access model, and whether an administrator of an ushered application is the same principal as an administrator of Usher). The last one also gates the bypass audit requirement, since a bypass cannot be logged as such until its source is defined. Lower-priority follow-ups (audit schema, multi-tenancy) can trail v1. See [admin model open questions](docs/atlas/roadmap/admin-model-open-questions.md).
 
 **Self-grant is a real path, approved by an owner or another administrator unless nobody else
 could.** A counted owner's self-grant, an administrator's included, is granted at once. An
@@ -104,6 +104,8 @@ Introspection needs Usher's first credential to Keycloak, a basic-auth one able 
 
 **Keys gain a watermark the Controller checks before any lookup** ([decisions.md](design/decisions.md), "The Controller admits each application within a share of its own"), minted by the plugin. Open: how the plugin and the Controller share its MAC keys and rotate them; the date after which an unwatermarked key is refused, and how key holders are told to rotate, since keys are issued for years and junk shaped like an old key costs a lookup until then.
 
+**The exchange's key check meets the key-exchange rules** in [security-workflow.md](design/security-workflow.md), § Emergency access revocation, including their dependency on the service issuing the keys reporting each key's issue time.
+
 ### Move ownership from a single owner to a set
 
 The business requirements call for several owners of one resource at once, with equal rights to restrict, share and revoke, naming the real case: a principal investigator holds legal authority while submitters do the work, so all of them need it. `permissions-model.md` instead requires exactly one owner per resource and builds the ownership cascade, last-owner promotion and transfer-before-removal on that singularity.
@@ -120,10 +122,13 @@ MVP, the flows' "Data Admin" is a system administrator rather than one who admin
 correlation is instance policy rather than an Usher rule. The resource is the study, and "dataset"
 is a looser label used at several levels beneath it.
 
-**Still open: may a system administrator grant data access as an override?** Role assignment,
-deciding who owns or has custody of what, is clearly the system administrator's. Granting a consumer
-access to a dataset is clearly the data-plane roles'. Whether the second is ever reachable as an
-override is unanswered, and the flows say no while this design currently allows it.
+**Decided: a system administrator grants no data access as an override.** On a resource with a
+counted owner, an administrator issues only `submitter` and `owner` grants, and any other role is
+refused with `403` `administratorGrantsNoConsumerAccess`; on one without, an administrator's grant
+of another role is an `orphanedResource` request that another administrator or an owner the resource
+gains decides. See [decisions.md](design/decisions.md) § An administrator's self-grant is approved by
+an owner or another administrator, unless nobody else could, and § The admin role governs who may
+reach what, and reaches data only by granting it to themselves.
 
 **Decouple the ownership cascade from Usher.** The cascade in `design/permissions-model.md` reads as
 Usher behaviour and should read as an instance-supplied policy with a default. The mechanism does
@@ -140,7 +145,7 @@ it is not Keycloak, which holds no grants and knows nothing of an invitation's l
 
 ### Step-up authentication for controlled categories
 
-A second factor for the people with controlled access, which only Usher knows, rather than for everyone. The shape follows RFC 9470, the OAuth step-up challenge: a category is marked as needing a stronger sign-in, and a principal whose token's `acr` falls short has it left out, with the Bridge answering a challenge that names the level. The portal then signs the person in again at that level, and the identity provider's level-of-authentication flow asks for the second factor. Usher reads `acr` alone, as the connector design in [admin-model.md](design/admin-model.md) already expects, and the same mechanism serves the self-grant step-up recorded there. Until it exists, a deployment holding controlled data requires a second factor of everyone, which Overture's Keycloak standard now asks of every password sign-in in the `overture` realm. What the step-up adds is therefore narrower: letting a deployment drop that realm-wide requirement for people without controlled access, and giving a self-grant its re-prompt at the moment of granting, which a second factor at sign-in does not. Not designed: the category's marking, the challenge's form at the Bridge, and how a portal shows a request it can satisfy only after a stronger sign-in.
+A second factor for the people with controlled access, which only Usher knows, rather than for everyone. The shape follows RFC 9470, the OAuth step-up challenge: a category is marked as needing a stronger sign-in, and a principal whose token's `acr` falls short has it left out, with the Bridge answering a challenge that names the level. The portal then signs the person in again at that level, and the identity provider's level-of-authentication flow asks for the second factor. The self-grant's step-up is built on the same reading of `acr`, as [admin-model.md](design/admin-model.md) § Self-grant step-up authentication states. Until the category step-up exists, a deployment holding controlled data requires a second factor of everyone, which Overture's Keycloak standard now asks of every password sign-in in the `overture` realm, so what it adds is letting a deployment drop that realm-wide requirement for people without controlled access. Not designed: the category's marking, the challenge's form at the Bridge, and how a portal shows a request it can satisfy only after a stronger sign-in.
 
 ### Authorization for long-running operations
 
@@ -586,21 +591,21 @@ deliberately, and its open questions. The Controller's read, `GET /admin/me/gran
 
 ### `@overture-stack/usher-types`
 
-Types and runtime validators shared by the Controller, the Bridge and adapters: the permissions payload, the enforcement result, the request's access value and the notices. Lives in `modules/types`. Built and tested on the Bridge's branch, awaiting review; unpublished.
+Types and runtime validators shared by the Controller, the Bridge and adapters: the permissions payload, the enforcement result, the request's access value and the notices. Lives in `modules/types`. Published on npm as `0.0.0-alpha.1`, `0.0.1-beta.1` and `0.0.1-beta.2`, with `rc` on `0.0.1-beta.2`. `latest` names `0.0.0-alpha.1` because npm sets it on a package's first publish; nothing has been released from `release`.
 
 ### `@overture-stack/usher-bridge--express`
 
-Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/bridge--express`, with its core free of Express so a Bridge for another framework can reuse it. Published as `0.0.0-alpha.1`.
+Shared library embedded in every ushered application: the authenticated token exchange, decryption, rendering, the caches, the notice stream by poll and push, and the degraded modes. Lives in `modules/bridge--express`, with its core free of Express so a Bridge for another framework can reuse it. Published on npm as `0.0.0-alpha.1`, `0.0.1-beta.1` and `0.0.1-beta.2`, with `rc` on `0.0.1-beta.2`. `latest` names `0.0.0-alpha.1` because npm sets it on a package's first publish; nothing has been released from `release`.
 
 **A testing entry point, before Arranger's adapter merges (decided by the developer, 2026-11-20).** A consumer's tests mount the real Express layer over a stand-in core through `createUsherMiddleware(core: LayerCore)`, and reach the core's degraded states, `uncertain` and a failed exchange, only by copying what the core computes in them, since the real core reaches them only by failing against a Controller. The package gains a testing entry point that builds those outcomes with the core's own functions, so each consumer imports them and no copy drifts from the core. Arranger's adapter tests are its first consumer.
 
 ### First publish of the two packages
 
-Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: lifting `private: true` from both packages, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, and real versions, since the packed Bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies. Pre-releases are `0.0.1-beta.N` under the `next` dist-tag, and main keeps `0.0.0-dev` (developer, 2026-11-03).
+Until then, a consumer tests against tarballs from `pnpm pack`, which rewrites `workspace:` ranges and applies the publish-time exports, never against a committed local path. Publishing becomes necessary when an adapter that depends on the packages is to merge, since its CI must resolve them, and it runs through Jenkins. Arranger's adapter is built and reviewed and merges only once both packages are published, so the first publish is its last step. Also before the first publish: lifting `private: true` from both packages, the publishing-integrity choice, the packaging checks waiting for CI in `tech-debt.md`, and real versions, since the packed Bridge's peer range on `usher-types` reads `^0.0.0`, which only `0.0.0` satisfies. Pre-releases are `0.0.1-beta.N` under the `next` dist-tag, and main keeps `0.0.0-dev` (developer, 2026-11-03); the dist-tags part is superseded by the rule of 2026-11-13 that dist-tags follow the branch, below.
 
 - The first publish is `0.0.0-alpha.1` under the `rc` dist-tag, for the initial overture-dev deployment alone (developer, 2026-11-13).
 - The review of both packages and the publishing-integrity choice come when the packages move off beta into `0.0.1` proper, so betas publish before that review (developer, 2026-11-13).
-- Betas, `0.0.1-beta.N` under `next`, follow once that deployment is stable. No further `0.0.0` prerelease is published: npm created a placeholder, `0.0.0-stage`, with each package's first publish, and it sorts above every `0.0.0-alpha`, so a caret range on one picks the placeholder. npm creates the same placeholder for every new package, so a package added later, such as a Bridge for another framework, publishes first at `0.0.1` or later. npm refuses its owners' deprecation of the placeholder; whether it can be removed later, or goes by itself, is open.
+- Betas, `0.0.1-beta.N`, under the dist-tag their branch gives, follow once that deployment is stable. No further `0.0.0` prerelease is published: npm created a placeholder, `0.0.0-stage`, with each package's first publish, and it sorts above every `0.0.0-alpha`, so a caret range on one picks the placeholder. npm creates the same placeholder for every new package, so a package added later, such as a Bridge for another framework, publishes first at `0.0.1` or later. npm refuses its owners' deprecation of the placeholder; whether it can be removed later, or goes by itself, is open.
 - Dist-tags follow the branch: `next` from main, `rc` from `release-test`, `latest` from `release` (developer, 2026-11-13). The pipeline publishes from `release-test` and `release` today. Publishing from main under `next` needs the pipeline to publish there too, with a version scheme for main's builds, since main keeps `0.0.0-dev`.
 
 ### Licence for Usher's packages, with their v1 releases
@@ -619,7 +624,7 @@ The Lyric adapter and others, each applying the Bridge's enforcement results in 
 
 ## Implementation: Management UI
 
-Design not yet started; see `.dev/design/management-ui.md`. High-level scope: resource, role, and category management; assigning roles and grants; emergency revocation; audit log viewer.
+MVP (developer, 2026-11-26). The access-management UI lives in this repository as a module exported as a reusable package, imported by both Stage and the iMicroSeq portal. It starts by absorbing the iMicroSeq portal's "Manage Studies" page, in `virusseq/portal-ui`, generalized to Usher's vocabulary, with the labels it displays configured per instance; theming comes later. Both consumers run React 17 and Next.js 12 today. Stage's consumer-side requirements are in the Stage repository at `.dev/docs/usher/access-management-ui.md`, and the package's design goes in `.dev/design/management-ui.md`. High-level scope: resource, role, and category management; assigning roles and grants; emergency revocation; audit log viewer.
 
 ### Accepting a grant in plain language (MVP)
 

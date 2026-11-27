@@ -191,6 +191,15 @@ Contrast with JWS (signed but readable by anyone holding the token).
 The container format for both IdP tokens (signed JWS) and permissions payloads (encrypted JWE).
 The two are structurally similar but serve different purposes and must not be confused.
 
+**Step-up**
+A sign-in at a stronger level, recent enough to count.
+
+The Controller reads it from a management token: its `acr` equals the `stepUpLevel` setting and its
+`auth_time` falls within `stepUpWindowSeconds`. A self-grant granted at once needs one, as does a
+counted owner extending or widening a grant they hold; a request refused without one is answered
+`401` `stepUpRequired`. See [admin-model.md](admin-model.md) § Self-grant step-up authentication,
+and § Step-up and the realm's confirmation level below. Not the **Confirmed** state of a credential.
+
 **TTL (time-to-live)**
 How long a cached Usher token is considered valid before the adapter must request a fresh one
 from Usher's exchange endpoint.
@@ -1133,6 +1142,16 @@ administrator.
 **Here:** a role is named on a `grants` row, `viewer` or `owner`, living in Usher's own store. The
 Controller resolves it to permissions before writing an Usher token, so no role name ever reaches an
 adapter. The two are unrelated beyond sharing a word.
+
+### Step-up and the realm's confirmation level
+
+**In the identity provider**, the stronger sign-in level is named `confirmation`, the `acr` its
+tokens carry once a person signs in at that level, beside `signin` for the ordinary one.
+
+**Here:** signing in again at that level is a step-up, the word RFC 9470 and NIST use, and
+`confirmation` is only the value `stepUpLevel` holds by default. A step-up is unrelated to a
+**Confirmed** credential, which the Bridge vouched for through an exchange, and to a signing key's
+confirmation.
 
 ### Subject
 

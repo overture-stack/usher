@@ -1,8 +1,10 @@
 # Revoking and lifting a person
 
-Revoking a person refuses them every Usher token, at every application, while the revocation
-stands. Their grants are kept, so lifting it restores them as they were. It acts in Usher alone: it
-ends no session at the identity provider and does not disable the account there.
+Revoking a person acts in Usher alone: every ushered application refuses them, whatever credential
+they present, while the revocation stands. Their grants are kept, so lifting it restores them as
+they were. It ends no session at the identity provider and does not disable the account there. A
+service that accepts API keys without going through Usher is not reached by it: cut the person's
+keys off there as your deployment's own break-glass procedure describes.
 
 ## Revoking
 
@@ -32,5 +34,6 @@ no longer counts as an administrator until the revocation is lifted. The revocat
 2. **Have the person sign in again.** A sign-in token issued at or before the lift is still
    refused, so access returns only with a fresh sign-in. A sign-out recorded since the revocation
    still applies.
+3. **Have the person get new API keys.**
 
 The lift is recorded as `identity.revocationLift`, at `critical`.

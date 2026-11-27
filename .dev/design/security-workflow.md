@@ -627,6 +627,12 @@ refused, since the lift is stamped on the store's clock and the token's `iat` on
 provider's, so a sign-in a few seconds after a lift can be refused when the provider's clock runs
 behind, and the person signs in again. See [schema.md](schema.md), decision A.
 
+**An API-key exchange answers to the same revocation.** While a revocation of the person stands,
+every exchange of an API key for them is refused. Each exchange validates the key afresh, and Usher
+keeps no record of a key's validity beyond the lifetime of the Usher token it issues for it. Once
+the revocation is lifted, a key issued before the lift is refused. That rule depends on the service
+issuing the keys reporting each key's issue time.
+
 ### Propagation: push + poll
 
 **One notice stream carries every kind of notice**: a principal's revocation, a category change,

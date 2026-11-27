@@ -76,13 +76,17 @@ deadline", answered in 42286 ms against its 4 s deadline (three runs of three al
 past its 10 s wait (two of two alone); and the harness start in
 `testing/harness/workerBridge.test.ts`, refused once for a store commit not answered within the
 store timeout (passing on its rerun), and its case at line 27, whose Bridge once missed its short
-wait for normal mode on the compressed profile (passing alone and on the rerun). The cause they
-share is load on the test process: the chain runs every database suite at once, at Node's default
-file concurrency, eleven here against six CPUs for Docker and two on CI's pod, and the harness runs
-each Controller inside the test process, so a starved event loop fires the Controller's own timers
-late, its exchange deadline among them. The exchange's deadline does bound its wait for a pooled
-connection, since `withinStoreTimeout` arms it before asking the pool, so admission's 42 s is that
-starvation, not an unbounded wait. It must pass deterministically.
+wait for normal mode on the compressed profile (passing alone and on the rerun). Two more harness
+cases failed once in a full run and passed alone: `testing/harness/containers.test.ts`'s "treats
+each HTTP path as told, and points requests at another server when told", its untouched path timing
+out after 256 s, and `testing/harness/harness.test.ts`'s case at line 478, whose stand-in identity
+provider's realm was not reachable within 180 s. The cause they share is load on the test process:
+the chain runs every database suite at once, at Node's default file concurrency, eleven here against
+six CPUs for Docker and two on CI's pod, and the harness runs each Controller inside the test
+process, so a starved event loop fires the Controller's own timers late, its exchange deadline among
+them. The exchange's deadline does bound its wait for a pooled connection, since
+`withinStoreTimeout` arms it before asking the pool, so admission's 42 s is that starvation, not an
+unbounded wait. It must pass deterministically.
 fix: every instance in the storeTimeout file now starts within four times the compressed store
 timeout, since an instance's whole start runs within its store timeout; bound the database suites'
 file concurrency in the chain to what the machine carries, give every other harness start a store
@@ -144,3 +148,21 @@ the forged-subject case first, and decide whether the two-encodings case is writ
 Until then, a placeholder stays a `todo`, so it never reads as a passing test.
 standalone: no
 context: the cases forge tokens and signatures, which the developer writes by hand.
+
+Controller code comments, test titles and docs still use the two terms
+`.dev/docs/atlas/roadmap/terminology-usage.md` retires in favour of principal: 266 uses in the
+comments of 57 files under `apps/controller/src` and `apps/controller/testing`, 59 in the test and
+suite titles of 24 files, 4 in `apps/controller/openapi.json` descriptions, and one each in
+`apps/controller/testing/README.md`, `.dev/docs/controller-tests.md`,
+`.dev/docs/atlas/roadmap/api-keys.md` and `.dev/docs/atlas/bridge/packaging-and-toolchain.md`.
+fix: one terminology pass, in its own commit, rewording each use to principal. Internal identifiers,
+such as parameter names and the `AdminCaller` type, stay out of it; contract names, such as the
+problem type `changeLocksOutCaller`, keep their names.
+standalone: yes
+
+`testing/harness/policy.test.ts`'s "are set once the rest of a fixture is seeded and read back, and
+set again by SQL" compares a resource's `registeredAt`, which the database's clock sets, with a
+`before` the test takes from Node's clock, so it fails whenever the two clocks differ by more than
+its one-second tolerance.
+fix: take `before` from the database's clock, so both times come from one clock.
+standalone: yes
