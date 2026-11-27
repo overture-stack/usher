@@ -127,20 +127,25 @@ export const unreadableBody = (rule: string): Problem =>
 	problem('unreadableBody', 400, 'Body unreadable', `The body ${rule}.`);
 
 /**
- * Answers a refusal: its status, its problem details as JSON, for a refused credential the
- * `WWW-Authenticate` naming the Bearer scheme alone, so every refused credential is answered alike,
- * and `Retry-After` when the refusal names a time to wait.
+ * Answers a refusal: its status, its problem details as JSON, for a 401 the `WWW-Authenticate`
+ * naming the Bearer scheme alone, so every refused credential is answered alike, unless the refusal
+ * names a challenge of its own, and `Retry-After` when the refusal names a time to wait.
  *
  * @param reply the reply.
  * @param refusal the problem.
- * @param retryAfterSeconds the whole seconds to wait before trying again, for a refusal naming them.
+ * @param options the challenge a 401 names in place of the bare `Bearer`, as a refused step-up's
+ *   does, and the whole seconds to wait before trying again, for a refusal naming them.
  */
-export const sendProblem = (reply: FastifyReply, refusal: Problem, retryAfterSeconds?: number): FastifyReply =>
+export const sendProblem = (
+	reply: FastifyReply,
+	refusal: Problem,
+	{ challenge, retryAfterSeconds }: { challenge?: string; retryAfterSeconds?: number } = {},
+): FastifyReply =>
 	reply
 		.code(refusal.status)
 		.headers({
 			'content-type': PROBLEM_MEDIA_TYPE,
 			...(retryAfterSeconds === undefined ? {} : { 'retry-after': String(retryAfterSeconds) }),
-			...(refusal.status === 401 ? { 'www-authenticate': 'Bearer' } : {}),
+			...(refusal.status === 401 ? { 'www-authenticate': challenge ?? 'Bearer' } : {}),
 		})
 		.send(JSON.stringify(refusal));

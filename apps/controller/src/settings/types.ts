@@ -14,6 +14,8 @@ export type SettingName =
 	| 'retentionMarginSeconds'
 	| 'selfGrantMaximumLifetimeSeconds'
 	| 'signInTokenMaximumLifetimeSeconds'
+	| 'stepUpLevel'
+	| 'stepUpWindowSeconds'
 	| 'streamLimitPerAudience'
 	| 'streamMaximumLifetimeSeconds'
 	| 'streamQueueLimit'
@@ -21,7 +23,7 @@ export type SettingName =
 	| 'tokenLifetimeSeconds';
 
 /** A setting fixed after the first run: a change to it is refused, and no change to it is recorded. */
-export type FixedSettingName = 'eventSource' | 'firstUser' | 'issuer';
+export type FixedSettingName = 'eventSource' | 'firstUser' | 'issuer' | 'stepUpLevel';
 
 /** A setting an admin changes through the Management API. */
 export type ChangeableSettingName = Exclude<SettingName, FixedSettingName>;
@@ -123,6 +125,16 @@ export interface Settings {
 
 	/** The longest a sign-in token may live, in seconds. */
 	signInTokenMaximumLifetimeSeconds: number;
+
+	/**
+	 * The `acr` a sign-in at the realm's step-up level carries, compared exactly: a self-grant
+	 * issued at once, and an owner extending or widening a grant they hold, need one within
+	 * {@link Settings.stepUpWindowSeconds}. Fixed after the first run.
+	 */
+	stepUpLevel: string;
+
+	/** How long a step-up counts after its sign-in, in seconds. */
+	stepUpWindowSeconds: number;
 
 	/** The most open notice streams one audience may hold. */
 	streamLimitPerAudience: number;

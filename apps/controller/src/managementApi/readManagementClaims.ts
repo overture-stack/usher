@@ -12,7 +12,7 @@ import {
 	sessionOf,
 	type TokenContents,
 } from '../signInTokens/index.js';
-import type { ClaimsReading, ManagementTokenSettings, Principal } from './types.js';
+import type { ClaimsReading, ManagementTokenSettings, Principal, SignIn } from './types.js';
 
 // The reading each refusal of a token's names is given, so the route answers and records each as its
 // own: a token naming no subject to act for, or one whose subject or session cannot be stored.
@@ -32,6 +32,13 @@ const lifetimeOf = (claims: TokenClaims): number | undefined => {
 	return typeof exp === 'number' && typeof iat === 'number' ? exp - iat : undefined;
 };
 
+// What a token says of its sign-in: its `acr` where it is text, and its `auth_time`, in seconds,
+// where it is a number. Neither refuses a token; each is only read.
+const signInOf = ({ acr, auth_time: authTime }: TokenClaims): SignIn => ({
+	...(typeof authTime === 'number' && Number.isFinite(authTime) ? { authenticatedAt: authTime * 1000 } : {}),
+	...(typeof acr === 'string' ? { level: acr } : {}),
+});
+
 const principalOf = (
 	claims: TokenClaims,
 	subject: string,
@@ -39,6 +46,7 @@ const principalOf = (
 	{ firstUser, serviceAccountRole }: Pick<ManagementTokenSettings, 'firstUser' | 'serviceAccountRole'>,
 ): Omit<Principal, 'administrator'> => ({
 	firstUser: isFirstUser(claims, subject, firstUser),
+	signIn: signInOf(claims),
 	subject,
 	tokenLifetimeSeconds,
 	type: isServiceAccount(claims, serviceAccountRole) ? 'serviceAccount' : 'human',
@@ -56,8 +64,8 @@ const principalOf = (
  * management API, and its `azp` must name a configured management client. Each refusal from the
  * access-token check on names the token's subject. A token that {@link isServiceAccount} marks as a
  * service account's is read as one, whether or not it also holds the first-user realm role. Whether
- * the token is the first user, as the configured first user names it, is read; a token says nothing
- * of admin status, which the store holds.
+ * the token is the first user, as the configured first user names it, is read, as are its `acr` and
+ * its `auth_time`, which refuse nothing; a token says nothing of admin status, which the store holds.
  *
  * @param token the token's verified claims and protected header.
  * @param settings the management API's audience and clients, the first user, the service-account role,

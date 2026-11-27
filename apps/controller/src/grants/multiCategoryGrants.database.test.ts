@@ -4,6 +4,7 @@ import { suite, test } from 'node:test';
 import {
 	administratorCaller,
 	assertSucceeded,
+	steppedUpSignIn,
 	createGrant,
 	createSelfGrant,
 	personCaller,
@@ -143,12 +144,15 @@ suite('a grant naming several categories', () => {
 
 	test("issues an owner's self-grant once per category, the grants written by one call", async () => {
 		await withHarness({ fixture: grantsFixture() }, async (harness) => {
-			const issued = await createSelfGrant(await personCaller(harness, CAST.ownerOfA1), {
-				categories: [CONTROLLED, UNMARKED],
-				expiresAt: inTwoHours(),
-				resource: STUDY_A1,
-				role: 'viewer',
-			});
+			const issued = await createSelfGrant(
+				await personCaller(harness, CAST.ownerOfA1, { mint: steppedUpSignIn() }),
+				{
+					categories: [CONTROLLED, UNMARKED],
+					expiresAt: inTwoHours(),
+					resource: STUDY_A1,
+					role: 'viewer',
+				},
+			);
 
 			assert.equal(issued.status, 201);
 			assert.deepEqual(categoriesIn(issued.body, 'grants'), [CONTROLLED, UNMARKED]);

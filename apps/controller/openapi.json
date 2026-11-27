@@ -19,6 +19,12 @@
 				"schema": {
 					"type": "string"
 				}
+			},
+			"WwwAuthenticateStepUp": {
+				"description": "Names the `Bearer` scheme. For `stepUpRequired`, it also carries RFC 9470's `error=\"insufficient_user_authentication\"`, the step-up level as `acr_values`, and the window in seconds as `max_age`, which a client passes to the identity provider when it signs the person in again.",
+				"schema": {
+					"type": "string"
+				}
 			}
 		},
 		"parameters": {
@@ -247,6 +253,33 @@
 				"headers": {
 					"WWW-Authenticate": {
 						"$ref": "#/components/headers/WwwAuthenticateBearer"
+					}
+				}
+			},
+			"CredentialOrStepUpRefused": {
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"allOf": [
+								{
+									"$ref": "#/components/schemas/ProblemDetails"
+								},
+								{
+									"properties": {
+										"code": {
+											"enum": ["stepUpRequired", "credentialRefused"]
+										}
+									},
+									"type": "object"
+								}
+							]
+						}
+					}
+				},
+				"description": "`credentialRefused`, as for every operation: no `Authorization` header, or a `Bearer` access token that is refused. Or `stepUpRequired`: the change takes effect at once and the principal has not signed in at the step-up level within the window, the instance's `stepUpLevel` and `stepUpWindowSeconds` settings. Sign in again at that level, as `WWW-Authenticate` names it, then send the request again.",
+				"headers": {
+					"WWW-Authenticate": {
+						"$ref": "#/components/headers/WwwAuthenticateStepUp"
 					}
 				}
 			},
@@ -2296,6 +2329,16 @@
 						"minimum": 1,
 						"type": "integer"
 					},
+					"stepUpLevel": {
+						"description": "The `acr` a sign-in at the realm's step-up level carries, compared exactly. A self-grant granted at once, and an owner extending or widening a grant they hold, need such a sign-in within `stepUpWindowSeconds`. Fixed after the first run.",
+						"type": "string"
+					},
+					"stepUpWindowSeconds": {
+						"description": "How long a step-up counts after its sign-in, in seconds.",
+						"maximum": 3600,
+						"minimum": 1,
+						"type": "integer"
+					},
 					"streamLimitPerAudience": {
 						"description": "The most open notice streams one audience may hold.",
 						"minimum": 1,
@@ -2339,6 +2382,8 @@
 					"retentionMarginSeconds",
 					"selfGrantMaximumLifetimeSeconds",
 					"signInTokenMaximumLifetimeSeconds",
+					"stepUpLevel",
+					"stepUpWindowSeconds",
 					"streamLimitPerAudience",
 					"streamMaximumLifetimeSeconds",
 					"streamQueueLimit",
@@ -2410,6 +2455,12 @@
 					},
 					"signInTokenMaximumLifetimeSeconds": {
 						"description": "The longest a sign-in token may live, in seconds.",
+						"minimum": 1,
+						"type": "integer"
+					},
+					"stepUpWindowSeconds": {
+						"description": "How long a step-up counts after its sign-in, in seconds.",
+						"maximum": 3600,
 						"minimum": 1,
 						"type": "integer"
 					},
@@ -4183,7 +4234,7 @@
 		},
 		"/admin/grants/self": {
 			"post": {
-				"description": "Anyone who can grant access and needs the data themselves takes it here, limited in time and recorded as a self-grant, so nobody holding that authority gives themselves lasting or unrecorded access to data they govern.\n\nAsks for the principal's own grant of a data-plane role on a resource, ending at an expiry in the future and within the instance's longest self-grant life of the request. The holder is always the principal, so a `holder` member is refused with `422`. One call writes a self-grant, or a request, per category in `categories`, in one transaction, as `createGrant` writes grants: all of them or none, each its own thereafter.\n\nAn owner of the resource, as `createGrant` defines one, is granted at once, with their acceptance showing what the role confers then, and is answered `201` with the grants, each `kind` `grant`. Each other owner of the resource is told of each self-grant.\n\nThe only live administrator, on a resource with no counted owner, is granted at once, since nobody else could approve it, and is answered `201` as an owner is. A live administrator is one who has accepted, is not removed and is not revoked; a pending nomination does not count. Each such self-grant's `grant.selfCreation` audit event carries `soleAdministrator: true`, so an audit can find it.\n\nAny other platform administrator who is not an owner of the resource asks instead, and is answered `202` with the requests, each `kind` `grantRequest`, pending. Each owner of the resource is told of each request, and no other platform administrator is. An owner of the resource or another platform administrator decides it through `POST /admin/grant-requests/{grantRequestId}/decisions`, never the platform administrator who asked; one left undecided lapses at its expiry. A request on a resource without an owner is told to nobody, and only another platform administrator can grant it.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; a platform administrator naming the `owner` role, `403` `administratorSelfOwnership`; whether the instance defines the role, and whether it is a data-plane role, `422`; whether the principal may see the resource, `404`, and holds authority on it, `403`, as for `createGrant`: a platform administrator on any resource, an owner on their own; the category, `422`; a grant held live on the same terms, `409` `alreadyHolds`; and, for a request, one by the principal on the same terms that is pending and has not lapsed, `409` `alreadyRequested`.",
+				"description": "Anyone who can grant access and needs the data themselves takes it here, limited in time and recorded as a self-grant, so nobody holding that authority gives themselves lasting or unrecorded access to data they govern.\n\nAsks for the principal's own grant of a data-plane role on a resource, ending at an expiry in the future and within the instance's longest self-grant life of the request. The holder is always the principal, so a `holder` member is refused with `422`. One call writes a self-grant, or a request, per category in `categories`, in one transaction, as `createGrant` writes grants: all of them or none, each its own thereafter.\n\nAn owner of the resource, as `createGrant` defines one, is granted at once, with their acceptance showing what the role confers then, and is answered `201` with the grants, each `kind` `grant`. Each other owner of the resource is told of each self-grant.\n\nThe only live administrator, on a resource with no counted owner, is granted at once, since nobody else could approve it, and is answered `201` as an owner is. A live administrator is one who has accepted, is not removed and is not revoked; a pending nomination does not count. Each such self-grant's `grant.selfCreation` audit event carries `soleAdministrator: true`, so an audit can find it.\n\nA self-grant granted at once, an owner's or the only live administrator's, needs a recent step-up: a sign-in at the instance's `stepUpLevel` within its `stepUpWindowSeconds`, read from the token's `acr` and `auth_time`. Without one it is refused with `401` `stepUpRequired`, and `WWW-Authenticate` names the level and the window. Every request within the window is taken under one step-up.\n\nAny other platform administrator who is not an owner of the resource asks instead, and is answered `202` with the requests, each `kind` `grantRequest`, pending. Each owner of the resource is told of each request, and no other platform administrator is. An owner of the resource or another platform administrator decides it through `POST /admin/grant-requests/{grantRequestId}/decisions`, never the platform administrator who asked; one left undecided lapses at its expiry. A request on a resource without an owner is told to nobody, and only another platform administrator can grant it.\n\nThe rules are judged in this order: the body's shape, refused with `400`; the body's own rules, `422`; a platform administrator naming the `owner` role, `403` `administratorSelfOwnership`; whether the instance defines the role, and whether it is a data-plane role, `422`; whether the principal may see the resource, `404`, and holds authority on it, `403`, as for `createGrant`: a platform administrator on any resource, an owner on their own; the category, `422`; for a self-grant granted at once, the step-up, `401`; a grant held live on the same terms, `409` `alreadyHolds`; and, for a request, one by the principal on the same terms that is pending and has not lapsed, `409` `alreadyRequested`.",
 				"operationId": "createSelfGrant",
 				"requestBody": {
 					"content": {
@@ -4221,7 +4272,7 @@
 						"$ref": "#/components/responses/Unreadable"
 					},
 					"401": {
-						"$ref": "#/components/responses/CredentialRefused"
+						"$ref": "#/components/responses/CredentialOrStepUpRefused"
 					},
 					"403": {
 						"content": {
@@ -4455,7 +4506,7 @@
 				"tags": ["Grants"]
 			},
 			"patch": {
-				"description": "A change to a grant can give as much access as a new one, so it is held to the same limits: an owner extending or widening a grant they hold gets no more than a self-grant could give, and a platform administrator, who does not share data, may only reduce a data grant.\n\nChanges a grant's expiry, removes it with `null`, or changes its role, as a JSON Merge Patch. A principal notice names the holder.\n\nAn owner of the grant's resource, as `createGrant` defines one, changes any grant on it. When they extend a grant they hold, moving its end later or removing it, or widen it, giving it a role that confers anything its current role does not, the grant must end within the instance's longest self-grant life from the change, so it gives them no more than a self-grant could; ending it earlier or narrowing its role has no such limit. A platform administrator who is not an owner of the resource may reduce any grant, ending it earlier while still in the future or giving it a narrower role, one whose capabilities are among the current role's. They may neither extend nor widen a grant they hold, whatever its role, and are refused with `403` `selfWideningNotPermitted`; of anyone else's grants they may extend only `submitter` and `owner` grants and widen a grant only within those two roles, and any other change of theirs is refused with `403` `administratorGrantsNoConsumerAccess`. To anyone else a grant is answered as one that does not exist, as is a grant on a retired resource.\n\nA role changes within its plane: a data-plane grant to another data-plane role, keeping its category, and a control-plane grant, such as an owner grant, to another control-plane role, keeping the whole resource. No one is given the administrator role, `admin`, and an owner grant takes no expiry. A self-grant, one its holder granted themself or asked for, keeps an expiry within the instance's longest self-grant life of its request.\n\nA revoked grant is refused with `doesNotHold`. A grant replaced by a newer grant on its terms, once it had expired, is refused with `grantReplaced`, and the newer grant is the one to change. An expired grant that nothing replaced is live again once extended.\n\nWidening a role confers nothing new until the holder accepts the grant again: their answers are left as they are, and a grant confers only capabilities its holder accepted.",
+				"description": "A change to a grant can give as much access as a new one, so it is held to the same limits: an owner extending or widening a grant they hold gets no more than a self-grant could give, and a platform administrator, who does not share data, may only reduce a data grant.\n\nChanges a grant's expiry, removes it with `null`, or changes its role, as a JSON Merge Patch. A principal notice names the holder.\n\nAn owner of the grant's resource, as `createGrant` defines one, changes any grant on it. When they extend a grant they hold, moving its end later or removing it, or widen it, giving it a role that confers anything its current role does not, the grant must end within the instance's longest self-grant life from the change, so it gives them no more than a self-grant could; ending it earlier or narrowing its role has no such limit. Extending or widening a grant they hold also needs a recent step-up, as `createSelfGrant` describes, and is refused with `401` `stepUpRequired` without one. A platform administrator who is not an owner of the resource may reduce any grant, ending it earlier while still in the future or giving it a narrower role, one whose capabilities are among the current role's. They may neither extend nor widen a grant they hold, whatever its role, and are refused with `403` `selfWideningNotPermitted`; of anyone else's grants they may extend only `submitter` and `owner` grants and widen a grant only within those two roles, and any other change of theirs is refused with `403` `administratorGrantsNoConsumerAccess`. To anyone else a grant is answered as one that does not exist, as is a grant on a retired resource.\n\nA role changes within its plane: a data-plane grant to another data-plane role, keeping its category, and a control-plane grant, such as an owner grant, to another control-plane role, keeping the whole resource. No one is given the administrator role, `admin`, and an owner grant takes no expiry. A self-grant, one its holder granted themself or asked for, keeps an expiry within the instance's longest self-grant life of its request.\n\nA revoked grant is refused with `doesNotHold`. A grant replaced by a newer grant on its terms, once it had expired, is refused with `grantReplaced`, and the newer grant is the one to change. An expired grant that nothing replaced is live again once extended.\n\nWidening a role confers nothing new until the holder accepts the grant again: their answers are left as they are, and a grant confers only capabilities its holder accepted.",
 				"operationId": "changeGrant",
 				"parameters": [
 					{
@@ -4488,7 +4539,7 @@
 						"$ref": "#/components/responses/Unreadable"
 					},
 					"401": {
-						"$ref": "#/components/responses/CredentialRefused"
+						"$ref": "#/components/responses/CredentialOrStepUpRefused"
 					},
 					"403": {
 						"content": {

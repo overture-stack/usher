@@ -22,6 +22,8 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 		retentionMarginSeconds,
 		selfGrantMaximumLifetimeSeconds,
 		signInTokenMaximumLifetimeSeconds,
+		stepUpLevel,
+		stepUpWindowSeconds,
 		streamLimitPerAudience,
 		streamMaximumLifetimeSeconds,
 		streamQueueLimit,
@@ -41,6 +43,8 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 		retentionMarginSeconds.kind === 'read' &&
 		selfGrantMaximumLifetimeSeconds.kind === 'read' &&
 		signInTokenMaximumLifetimeSeconds.kind === 'read' &&
+		stepUpLevel.kind === 'read' &&
+		stepUpWindowSeconds.kind === 'read' &&
 		streamLimitPerAudience.kind === 'read' &&
 		streamMaximumLifetimeSeconds.kind === 'read' &&
 		streamQueueLimit.kind === 'read' &&
@@ -60,6 +64,8 @@ export const heldOf = (readings: HeldReadings): Omit<Settings, 'grantRules'> | u
 				retentionMarginSeconds: retentionMarginSeconds.value,
 				selfGrantMaximumLifetimeSeconds: selfGrantMaximumLifetimeSeconds.value,
 				signInTokenMaximumLifetimeSeconds: signInTokenMaximumLifetimeSeconds.value,
+				stepUpLevel: stepUpLevel.value,
+				stepUpWindowSeconds: stepUpWindowSeconds.value,
 				streamLimitPerAudience: streamLimitPerAudience.value,
 				streamMaximumLifetimeSeconds: streamMaximumLifetimeSeconds.value,
 				streamQueueLimit: streamQueueLimit.value,

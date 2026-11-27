@@ -8,6 +8,7 @@ import {
 	assertRefused,
 	assertSucceeded,
 	changeGrantExpiry,
+	steppedUpSignIn,
 	createGrant,
 	createSelfGrant,
 	decideGrantRequest,
@@ -133,7 +134,7 @@ suite('the grant rate against the store', () => {
 				fixture: grantsFixture(),
 			},
 			async (harness) => {
-				const ana = await personCaller(harness, CAST.ownerOfA1);
+				const ana = await personCaller(harness, CAST.ownerOfA1, { mint: steppedUpSignIn() });
 				const anaAsAdministrator = await administratorCaller(harness, {
 					person: CAST.ownerOfA1,
 				});

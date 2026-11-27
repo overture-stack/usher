@@ -95,6 +95,8 @@ export const TEMPLATE_SETTINGS: Settings = {
 	retentionMarginSeconds: 30,
 	selfGrantMaximumLifetimeSeconds: 86400,
 	signInTokenMaximumLifetimeSeconds: 3600,
+	stepUpLevel: 'confirmation',
+	stepUpWindowSeconds: 300,
 	streamLimitPerAudience: 64,
 	streamMaximumLifetimeSeconds: 900,
 	streamQueueLimit: 1000,
@@ -109,7 +111,7 @@ const seededTemplates = new Map<string, DatabaseTemplate>();
  * The template a database seeded with the settings given is cloned from. A seed equal to
  * {@link TEMPLATE_SETTINGS} is the Controller's own template; any other gets a template of its own, built
  * once per distinct seed and cached, so tests sharing a seed share it. The fixed settings (`eventSource`,
- * `firstUser` and `issuer`) are kept as first seeded, so a test needing another value of one of them gets a
+ * `firstUser`, `issuer` and `stepUpLevel`) are kept as first seeded, so a test needing another value of one of them gets a
  * database seeded with it, and no test writes to a fixed row.
  *
  * @param settings the whole of the settings the template's first run seeds.

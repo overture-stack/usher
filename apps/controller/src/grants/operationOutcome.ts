@@ -1,7 +1,7 @@
 import type { Actor, JsonValue } from '../eventLog/index.js';
 import { ControllerError } from '../failures/index.js';
 import type { Problem } from '../http/index.js';
-import type { OperationOutcome, Principal } from '../managementApi/index.js';
+import type { StepUpJudgement, OperationOutcome, Principal } from '../managementApi/index.js';
 
 /**
  * An id in the form the store gives a grant's or a grant request's; any other text names neither,
@@ -12,11 +12,13 @@ export const STORED_ID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 // A refusal reached inside a change's transaction, thrown so the transaction rolls back and nothing
 // of the change is written, a person first met in it included.
 class RefusedWithin extends Error {
+	readonly challenge: string | undefined;
 	readonly problem: Problem;
 	readonly recordedReason: string | undefined;
 
-	constructor(problem: Problem, recordedReason?: string) {
+	constructor(problem: Problem, { challenge, recordedReason }: { challenge?: string; recordedReason?: string } = {}) {
 		super(problem.code);
+		this.challenge = challenge;
 		this.problem = problem;
 		this.recordedReason = recordedReason;
 	}
@@ -30,7 +32,19 @@ class RefusedWithin extends Error {
  * @param recordedReason the reason its event records, where it differs from the code answered.
  */
 export const refuseWithin = (problem: Problem, recordedReason?: string): never => {
-	throw new RefusedWithin(problem, recordedReason);
+	throw new RefusedWithin(problem, recordedReason === undefined ? {} : { recordedReason });
+};
+
+/**
+ * Refuses a change from inside its transaction, as {@link refuseWithin} does, unless its principal
+ * stepped up recently: the refusal answers the judgement's problem with its challenge.
+ *
+ * @param judgement whether the principal stepped up recently, as `judgeStepUp` judges it.
+ */
+export const steppedUpWithin = (judgement: StepUpJudgement): void => {
+	if (judgement.kind === 'refused') {
+		throw new RefusedWithin(judgement.problem, { challenge: judgement.challenge });
+	}
 };
 
 /** An operation's refusal, as {@link refused} gives one. */
@@ -81,7 +95,10 @@ export const changeOutcome = <Result>(
 ): Promise<RefusedOutcome | Result> =>
 	change.catch((failure: unknown) => {
 		if (failure instanceof RefusedWithin) {
-			return refused(failure.problem, failure.recordedReason);
+			return {
+				...refused(failure.problem, failure.recordedReason),
+				...(failure.challenge === undefined ? {} : { challenge: failure.challenge }),
+			};
 		}
 		const constraint = constraintOf(failure);
 		const problem = constraint === undefined ? undefined : refusedByStore[constraint];

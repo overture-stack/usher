@@ -390,14 +390,19 @@ const tokenOf = (subject: string, extra: Readonly<Record<string, unknown>> = {})
 	kind: 'verified' as const,
 });
 
+// A sign-in at the step-up level a minute ago, which every person here carries but `anaSignedIn`,
+// so a test judges the step-up only where it names that principal.
+const STEPPED_UP = { acr: 'confirmation', auth_time: SECONDS - 60 };
+
 // The bearer credential each caller sends, by the caller's name.
 const TOKENS: Readonly<Record<string, ReturnType<typeof tokenOf>>> = {
-	administrator: tokenOf('subject-administrator'),
-	ana: tokenOf('subject-ana'),
-	bo: tokenOf('subject-bo'),
-	cy: tokenOf('subject-cy'),
-	eli: tokenOf('subject-eli'),
-	secondAdministrator: tokenOf('subject-second-administrator'),
+	administrator: tokenOf('subject-administrator', STEPPED_UP),
+	ana: tokenOf('subject-ana', STEPPED_UP),
+	anaSignedIn: tokenOf('subject-ana', { acr: '1', auth_time: SECONDS - 60 }),
+	bo: tokenOf('subject-bo', STEPPED_UP),
+	cy: tokenOf('subject-cy', STEPPED_UP),
+	eli: tokenOf('subject-eli', STEPPED_UP),
+	secondAdministrator: tokenOf('subject-second-administrator', STEPPED_UP),
 	serviceAccount: tokenOf('subject-service', { realm_access: { roles: ['usher-service-account'] } }),
 };
 
@@ -451,6 +456,8 @@ const standUp = (context: TestContext, world: Partial<World> = {}, autoAccept = 
 				databaseSchema: 'usher',
 				identityProviderIssuer: ISSUER,
 				selfGrantMaximumLifetimeSeconds: 86_400,
+				stepUpLevel: 'confirmation',
+				stepUpWindowSeconds: 300,
 				submitterCategory: 'global.unmarked',
 			},
 			store: {
@@ -2065,6 +2072,34 @@ suite('creating a self-grant', () => {
 		assert.equal(methodsCalled(stand).includes('writeNotifications'), false);
 	});
 
+	test("refuses a counted owner's self-grant 401 stepUpRequired with its challenge when they signed in only at the ordinary level, writing nothing", async (context) => {
+		const stand = standUp(context);
+
+		const refused = await selfGrant(stand, 'anaSignedIn');
+
+		assert.deepEqual(outcomeOf(refused), [401, 'stepUpRequired']);
+		assert.equal(
+			refused.headers['www-authenticate'],
+			'Bearer error="insufficient_user_authentication", error_description="A recent step-up is required", acr_values="confirmation", max_age=300',
+		);
+		assert.deepEqual(methodsCalled(stand), ['findRole', 'readStanding', 'findOfferedCategory']);
+		assert.deepEqual(eventData(stand), [
+			{
+				reason: 'stepUpRequired',
+				resourceId: 'STUDY-A1',
+				result: 'denied',
+				sourceIp: '127.0.0.1',
+				type: 'grant.selfCreation',
+			},
+		]);
+	});
+
+	test('judges the step-up after every other refusal of a self-grant', async (context) => {
+		const refused = await selfGrant(standUp(context), 'anaSignedIn', { ...SELF_VIEWER, role: 'Viewer' });
+
+		assert.deepEqual(outcomeOf(refused), [422, 'unknownRole']);
+	});
+
 	test('refuses a live grant held 409 alreadyHolds, and a request pending and unlapsed on the same terms 409 alreadyRequested, writing nothing', async (context) => {
 		const refusals = [
 			await selfGrant(standUp(context, { held: true }), 'ana'),
@@ -2921,6 +2956,33 @@ suite('changing a grant', () => {
 			[422, 'selfGrantExpiryRequired'],
 			[200, undefined],
 		]);
+	});
+
+	test('refuses a counted owner extending or widening a grant they hold 401 stepUpRequired unless they stepped up, and holds no one ending it earlier to that', async (context) => {
+		const stand = standUp(context, {
+			grant: {
+				...ENDING,
+				expiresAt: new Date(NOW + 2 * HOUR_MS),
+				holderSubject: 'subject-ana',
+				holderUserId: 'person-ana',
+			},
+		});
+
+		const answers = [
+			await change(stand, 'anaSignedIn', { expiresAt: new Date(NOW + 3 * HOUR_MS).toISOString() }),
+			await change(stand, 'anaSignedIn', { expiresAt: new Date(NOW + HOUR_MS).toISOString() }),
+			await change(stand, 'ana', { expiresAt: new Date(NOW + 3 * HOUR_MS).toISOString() }),
+		];
+
+		assert.deepEqual(answers.map(outcomeOf), [
+			[401, 'stepUpRequired'],
+			[200, undefined],
+			[200, undefined],
+		]);
+		assert.match(
+			String(answers[0]?.headers['www-authenticate']),
+			/^Bearer error="insufficient_user_authentication"/u,
+		);
 	});
 });
 

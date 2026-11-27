@@ -56,6 +56,27 @@ const text =
 		return read(value);
 	};
 
+// The levels a realm gives an ordinary sign-in: Keycloak's own `0` and `1`, and `signin` as this
+// platform's realms name it. A step-up level equal to one would count every sign-in.
+const BASE_LEVELS: ReadonlySet<string> = new Set(['0', '1', 'signin']);
+
+// Anything but a printable ASCII character, and a double quote or a backslash: none can stand in an
+// `acr` written into a challenge's quoted `acr_values`, a header's list separated by spaces.
+const UNQUOTABLE = /[^\x21-\x7e]|["\\]/u;
+
+const stepUpLevel = (value: unknown): SettingReading<string> => {
+	if (typeof value !== 'string' || value === '') {
+		return refuse('is not text holding at least one character');
+	}
+	if (UNQUOTABLE.test(value)) {
+		return refuse('holds a character other than printable ASCII, or a space, a double quote or a backslash');
+	}
+	return BASE_LEVELS.has(value) ? refuse("is an ordinary sign-in's level: 0, 1 or signin") : read(value);
+};
+
+// The longest a step-up may count, in seconds: an hour.
+const LONGEST_STEP_UP_WINDOW_SECONDS = 3600;
+
 const GLOBAL_CATEGORY = /^global\.[^.]+$/u;
 
 const globalCategory = (value: unknown): SettingReading<string> => {
@@ -94,6 +115,13 @@ export const SETTING_DEFINITIONS: { readonly [Name in SettingName]: SettingDefin
 		changeable: true,
 		fallback: 300,
 		read: wholeNumber(1),
+		severity: 'critical',
+	},
+	stepUpLevel: { changeable: false, fallback: 'confirmation', read: stepUpLevel },
+	stepUpWindowSeconds: {
+		changeable: true,
+		fallback: 300,
+		read: wholeNumber(1, LONGEST_STEP_UP_WINDOW_SECONDS),
 		severity: 'critical',
 	},
 	streamLimitPerAudience: { changeable: true, fallback: 64, read: wholeNumber(1), severity: 'warning' },

@@ -3054,6 +3054,20 @@ export const instantOf = (value: unknown, label = 'the member'): number => {
 };
 
 /** Who a caller is beyond the default, and where it calls. */
+/** The step-up level a harness's Controller holds: the setting's default. */
+export const STEP_UP_LEVEL = 'confirmation';
+
+/**
+ * A sign-in at the step-up level some seconds ago, as `mint` options: a token carrying it is a
+ * step-up, which a self-grant issued at once needs, as does a counted owner extending or widening a
+ * grant they hold.
+ *
+ * @param secondsAgo how long ago the sign-in was: a second by default.
+ */
+export const steppedUpSignIn = (secondsAgo: number = 1): MintOptions => ({
+	claims: { acr: STEP_UP_LEVEL, auth_time: Math.floor(Date.now() / 1000) - secondsAgo },
+});
+
 export interface CallerOptions {
 	/** Claims and options over the management token's. */
 	mint?: MintOptions;

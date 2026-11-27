@@ -8,6 +8,15 @@ import type { ControllerSettings, Settings } from '../settings/index.js';
 import type { CurrencyRefusal, Session, StandingQuestion, StoredRefusal } from '../signInTokens/index.js';
 import type { WindowedRefusals } from '../windowedRefusals/index.js';
 
+/** What a management token says of the sign-in it came from, each member where the token carries it. */
+export interface SignIn {
+	/** The token's `auth_time`, in milliseconds since the Unix epoch, where it is a number. */
+	authenticatedAt?: number;
+
+	/** The token's `acr`, the level the sign-in reached, where it is text. */
+	level?: string;
+}
+
 /** Who an accepted management token speaks for. */
 export interface Principal {
 	/**
@@ -21,6 +30,12 @@ export interface Principal {
 
 	/** The identity provider's subject, the token's `sub`. */
 	subject: string;
+
+	/**
+	 * What the token says of its sign-in, which a step-up is judged by; absent where nothing was
+	 * read of one, which counts as no step-up.
+	 */
+	signIn?: SignIn;
 
 	/** The seconds between the token's issue and its expiry, `exp` less `iat`, which a change of the sign-in token maximum judges. */
 	tokenLifetimeSeconds: number;
@@ -147,6 +162,9 @@ export type OperationOutcome =
 			status: number;
 	  }
 	| {
+			/** The `WWW-Authenticate` value a 401 answers with, in place of the bare `Bearer`. */
+			challenge?: string;
+
 			kind: 'refused';
 			problem: Problem;
 

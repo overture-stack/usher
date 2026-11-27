@@ -17,10 +17,13 @@ const GRANT_RATE_SETTING = 'grantRateThreshold';
 
 const GRANT_RATE_DEFAULT = { operationCount: 10, windowSeconds: 60 };
 
-// What a store seeded by the release before this one holds: every setting but the grant rate's threshold,
-// with the values the harness gives them.
+// The settings the step-up settings migration adds after this one, which no store held before it.
+const LATER_SETTINGS: ReadonlySet<string> = new Set(['stepUpLevel', 'stepUpWindowSeconds']);
+
+// What a store seeded by the release before this one holds: every setting but the grant rate's threshold
+// and the later ones, with the values the harness gives them.
 const BEFORE_THRESHOLD: Readonly<Partial<Settings>> = Object.fromEntries(
-	Object.entries(TEMPLATE_SETTINGS).filter(([name]) => name !== GRANT_RATE_SETTING),
+	Object.entries(TEMPLATE_SETTINGS).filter(([name]) => name !== GRANT_RATE_SETTING && !LATER_SETTINGS.has(name)),
 );
 
 const settingsHeld = (owner: pg.ClientBase, schema: string) =>
@@ -71,7 +74,7 @@ suite('the grant operations migration on a store the release before it left', ()
 		const before = await settingsHeld(owner, database.schema);
 		const seedBefore = await seedRowHeld(owner, database.schema);
 
-		await migrateDatabaseInProcess(database);
+		await migrateDatabaseInProcess(database, { target: '0010_grant_operations' });
 		const applied = (await appliedMigrations(owner)).map(({ name }) => name);
 		const after = await settingsHeld(owner, database.schema);
 		const seedAfter = await seedRowHeld(owner, database.schema);

@@ -22,6 +22,8 @@ const defaultsWith = (overrides: Readonly<Record<string, unknown>>): Record<stri
 	retentionMarginSeconds: 30,
 	selfGrantMaximumLifetimeSeconds: 86400,
 	signInTokenMaximumLifetimeSeconds: 300,
+	stepUpLevel: 'confirmation',
+	stepUpWindowSeconds: 300,
 	streamLimitPerAudience: 64,
 	streamMaximumLifetimeSeconds: 900,
 	streamQueueLimit: 1000,

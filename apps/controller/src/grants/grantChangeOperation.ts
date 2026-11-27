@@ -1,5 +1,11 @@
 import { type AuditEvent, eventInstant } from '../eventLog/index.js';
-import type { EventMembers, ManagementOperation, NamedByRequest, OperationOutcome } from '../managementApi/index.js';
+import {
+	type EventMembers,
+	judgeStepUp,
+	type ManagementOperation,
+	type NamedByRequest,
+	type OperationOutcome,
+} from '../managementApi/index.js';
 import { countedWithRefusal } from './countedWithRefusal.js';
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { grantView } from './grantView.js';
@@ -8,6 +14,7 @@ import {
 	actorOf,
 	answered,
 	changeOutcome,
+	steppedUpWithin,
 	refused,
 	refuseWithin,
 	roleMissing,
@@ -74,7 +81,9 @@ const changeEvents = (
  * `noAuthorityOnResource`; and the change itself, as {@link judgeGrantChange} judges it at the
  * configured clock's instant, for a counted owner or for a platform administrator who is not one,
  * the caller holding the grant when the person holding their identity under the trusted issuer is
- * its holder.
+ * its holder. A counted owner extending or widening a grant they hold is then refused 401
+ * `stepUpRequired` with its challenge unless they signed in at the step-up level within
+ * the window, as `judgeStepUp` judges it, before anything is written.
  *
  * A change keeping the grant's end and its role changes nothing of the grant and records no event
  * of its own. Any other writes the grant's new end and role, its holder's answers left as they
@@ -139,17 +148,27 @@ export const grantChangeOperation = (
 							: refuseWithin(GRANT_PROBLEMS.grantNotFound, GRANT_PROBLEMS.noAuthorityOnResource.code);
 				const grant = (await grants.readGrant(grantId)) ?? refuseWithin(GRANT_PROBLEMS.grantNotFound);
 				const role = (await grants.findRole(grant.role)) ?? roleMissing();
+				const holderIsCaller = (await grants.findPerson(principal.subject)) === grant.holderUserId;
 				const judgement = judgeGrantChange({
 					authority,
 					change: input,
 					current: { ...grant, role },
-					holderIsCaller: (await grants.findPerson(principal.subject)) === grant.holderUserId,
+					holderIsCaller,
 					maximumSeconds: settings.selfGrantMaximumLifetimeSeconds,
 					newRole: input.role === undefined ? undefined : await grants.findRole(input.role),
 					now,
 				});
 				if (judgement.kind === 'refuse') {
 					return refuseWithin(judgement.problem);
+				}
+				// A counted owner extending or widening a grant they hold widens their own access at once. An
+				// administrator who is not one is refused that by judgeGrantChange, so the step-up is an owner's alone.
+				if (
+					authority === 'owner' &&
+					holderIsCaller &&
+					(judgement.endMoved === 'later' || judgement.roleMoved === 'wider')
+				) {
+					steppedUpWithin(judgeStepUp(principal, settings, now.getTime()));
 				}
 				const changed: StoredGrant = {
 					...grant,

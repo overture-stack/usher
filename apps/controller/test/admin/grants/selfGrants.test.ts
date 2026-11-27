@@ -9,6 +9,7 @@ import {
 	assertRuleBroken,
 	assertUnreadable,
 	comparableRefusal,
+	steppedUpSignIn,
 	createSelfGrant,
 	decideGrantRequest,
 	personCaller,
@@ -185,7 +186,7 @@ suite('creating a self-grant', () => {
 
 	test('lets an owner self-grant on their own resource under the same rules', async () => {
 		await withHarness({ fixture: grantsFixture() }, async (harness) => {
-			const owner = await personCaller(harness, CAST.ownerOfA1);
+			const owner = await personCaller(harness, CAST.ownerOfA1, { mint: steppedUpSignIn() });
 			const before = await rowCounts(harness);
 
 			const noExpiry = await createSelfGrant(owner, selfGrantUntil(twoHoursAhead()), {
@@ -279,7 +280,7 @@ suite('creating a self-grant', () => {
 			}));
 			const after = await rowCounts(harness);
 			const byOwner = await createSelfGrant(
-				await personCaller(harness, CAST.ownerOfA1),
+				await personCaller(harness, CAST.ownerOfA1, { mint: steppedUpSignIn() }),
 				selfGrantUntil(twoHoursAhead()),
 			);
 
@@ -303,7 +304,7 @@ suite('creating a self-grant', () => {
 			const onOpen = await createSelfGrant(outsider, selfGrantUntil(twoHoursAhead(), { resource: OPEN_STUDY }));
 			const after = await rowCounts(harness);
 			const byOwner = await createSelfGrant(
-				await personCaller(harness, CAST.ownerOfA1),
+				await personCaller(harness, CAST.ownerOfA1, { mint: steppedUpSignIn() }),
 				selfGrantUntil(twoHoursAhead()),
 			);
 

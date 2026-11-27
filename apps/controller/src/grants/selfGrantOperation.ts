@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
 import { type AuditEvent, eventInstant, type JsonValue } from '../eventLog/index.js';
-import type { EventMembers, ManagementOperation, NamedByRequest, OperationOutcome } from '../managementApi/index.js';
+import {
+	type EventMembers,
+	judgeStepUp,
+	type ManagementOperation,
+	type NamedByRequest,
+	type OperationOutcome,
+} from '../managementApi/index.js';
 import type { ResourceStanding } from '../resourceStanding/index.js';
 import { selfGrantAuthority } from './grantAuthority.js';
 import { countedWithRefusal } from './countedWithRefusal.js';
@@ -9,7 +15,7 @@ import { type CategoryNaming, categoryNamingsOf, forCategory, offeredCategory } 
 import { GRANT_PROBLEMS } from './grantProblems.js';
 import { grantRequestView } from './grantRequestView.js';
 import { grantView } from './grantView.js';
-import { actorOf, answered, changeOutcome, refuseWithin } from './operationOutcome.js';
+import { actorOf, answered, changeOutcome, steppedUpWithin, refuseWithin } from './operationOutcome.js';
 import { readSelfGrantCreation } from './readSelfGrantCreation.js';
 import type { GrantOperationsSettings, GrantStore, GrantTerms, SelfGrantCreation, StoredRole } from './types.js';
 import { placeGrant } from './writeGrant.js';
@@ -222,8 +228,10 @@ const request = async (
  * data-plane role naming no category 422 `categoryRequired`, except `submitter`, which takes the
  * instance's submitter category; the caller's authority on the resource, its row locked against
  * every other change's, as {@link selfGrantAuthority} decides it; and each category named, in order,
- * that the resource does not offer 422 `categoryNotOffered`. The caller is recorded on first meeting
- * them. One self-grant, or one request, is then written per category, in order, sharing one
+ * that the resource does not offer 422 `categoryNotOffered`; and, for a self-grant issued at once,
+ * a step-up, refused 401 `stepUpRequired` with its challenge unless the principal signed in
+ * at the step-up level within the window, as `judgeStepUp` judges it. The caller is
+ * recorded on first meeting them, after every judgement. One self-grant, or one request, is then written per category, in order, sharing one
  * creation id; a refusal of any writes none and names the category's place in `categories`.
  *
  * A counted owner of the resource is issued the grant at once, its granter and its holder the
@@ -311,6 +319,11 @@ export const selfGrantOperation = ({
 					],
 					Promise.resolve([]),
 				);
+				// Judged last, so a principal steps up only for a self-grant nothing else refuses, and
+				// before the first write.
+				if (authority.kind === 'issue') {
+					steppedUpWithin(judgeStepUp(principal, settings, now.getTime()));
+				}
 				const userId = await grants.findOrRecordPerson(principal.subject, now);
 				const creationId = randomUUID();
 				const write = authority.kind === 'issue' ? issue : request;

@@ -12,6 +12,7 @@ import type { TokenClaims, TokenVerification } from '../identityProvider/index.j
 import { EXCESSIVE_LIFETIME, MISSING_ISSUED_AT, type StoredRefusal } from '../signInTokens/index.js';
 import { createWindowedRefusals, type WindowedRefusals } from '../windowedRefusals/index.js';
 import { admittedAdministrator, AdministratorStatusWithdrawn } from './administratorAuthority.js';
+import { STEP_UP_REQUIRED } from './judgeStepUp.js';
 import { managementRoute, STORE_FAILED } from './managementRoute.js';
 import { BODY_LIMIT_BYTES } from './problems.js';
 import { refusalTallyEvent } from './refusalTallyEvent.js';
@@ -951,6 +952,26 @@ suite("a management operation's refusals, as its own event records them", () => 
 		);
 	});
 
+	test('answers a refusal naming a challenge with that challenge in WWW-Authenticate, recording it as denied', async (context) => {
+		const challenge = 'Bearer error="insufficient_user_authentication", acr_values="confirmation", max_age=300';
+		const stand = await standUp(context, {
+			outcome: async () => ({ challenge, kind: 'refused', problem: STEP_UP_REQUIRED(300) }),
+			verifications: ADMIN,
+		});
+
+		const answer = await post(stand);
+
+		assert.deepEqual(
+			[answer.statusCode, codeOf(answer), answer.headers['www-authenticate']],
+			[401, 'stepUpRequired', challenge],
+		);
+		assert.equal(answer.body.includes('insufficient_user_authentication'), false);
+		assert.deepEqual(
+			deniedFor(stand).map(({ data }) => data['reason']),
+			['stepUpRequired'],
+		);
+	});
+
 	test("names in a refused event what the request's body names, as the operation reads it, and nothing of a body holding text that cannot be stored", async (context) => {
 		const stand = await standUp(context, {
 			departures: {
@@ -1437,6 +1458,7 @@ suite("a management operation's admin status and its first administrator", () =>
 			{
 				administrator: false,
 				firstUser: true,
+				signIn: {},
 				subject: 'subject-ana',
 				tokenLifetimeSeconds: 310,
 				type: 'human',
@@ -1688,6 +1710,7 @@ suite('a management operation taking a query, or answering with no content', () 
 				principal: {
 					administrator: true,
 					firstUser: false,
+					signIn: {},
 					subject: 'subject-ana',
 					tokenLifetimeSeconds: 310,
 					type: 'human',

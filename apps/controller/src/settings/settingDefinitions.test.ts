@@ -19,6 +19,8 @@ const ALL_NAMES: readonly SettingName[] = [
 	'retentionMarginSeconds',
 	'selfGrantMaximumLifetimeSeconds',
 	'signInTokenMaximumLifetimeSeconds',
+	'stepUpLevel',
+	'stepUpWindowSeconds',
 	'streamLimitPerAudience',
 	'streamMaximumLifetimeSeconds',
 	'streamQueueLimit',
@@ -26,7 +28,7 @@ const ALL_NAMES: readonly SettingName[] = [
 	'tokenLifetimeSeconds',
 ];
 
-const FIXED: readonly SettingName[] = ['eventSource', 'firstUser', 'issuer'];
+const FIXED: readonly SettingName[] = ['eventSource', 'firstUser', 'issuer', 'stepUpLevel'];
 
 const CRITICAL: readonly SettingName[] = [
 	'backChannelLogout',
@@ -36,6 +38,7 @@ const CRITICAL: readonly SettingName[] = [
 	'retentionMarginSeconds',
 	'selfGrantMaximumLifetimeSeconds',
 	'signInTokenMaximumLifetimeSeconds',
+	'stepUpWindowSeconds',
 	'submitterCategory',
 	'tokenLifetimeSeconds',
 ];
@@ -60,7 +63,7 @@ const refusedBy = (name: SettingName, value: unknown): boolean =>
 	SETTING_DEFINITIONS[name].read(value).kind === 'refused';
 
 suite('setting definitions', () => {
-	test('defines exactly the seventeen settings the settings table names', () => {
+	test('defines exactly the settings the settings table names', () => {
 		assert.deepEqual(Object.keys(SETTING_DEFINITIONS).toSorted(), [...ALL_NAMES].toSorted());
 	});
 
@@ -79,6 +82,8 @@ suite('setting definitions', () => {
 		assert.equal(SETTING_DEFINITIONS.backChannelLogout.fallback, true);
 		assert.equal(SETTING_DEFINITIONS.submitterCategory.fallback, 'global.unmarked');
 		assert.deepEqual(SETTING_DEFINITIONS.firstUser.fallback, { realmRole: 'usher-first-user' });
+		assert.equal(SETTING_DEFINITIONS.stepUpLevel.fallback, 'confirmation');
+		assert.equal(SETTING_DEFINITIONS.stepUpWindowSeconds.fallback, 300);
 	});
 
 	test('gives issuer and eventSource no default, so a first run must name them', () => {
@@ -86,7 +91,7 @@ suite('setting definitions', () => {
 		assert.equal(SETTING_DEFINITIONS.eventSource.fallback, undefined);
 	});
 
-	test('marks issuer, eventSource and firstUser as fixed after the first run, and the rest as changeable', () => {
+	test('marks eventSource, firstUser, issuer and stepUpLevel as fixed after the first run, and the rest as changeable', () => {
 		ALL_NAMES.forEach((name) => assert.equal(SETTING_DEFINITIONS[name].changeable, !FIXED.includes(name), name));
 	});
 
@@ -155,6 +160,34 @@ suite('setting definitions', () => {
 	test('reads the first user through the first-user reader', () => {
 		assert.deepEqual(valueOf('firstUser', { subject: 'a1b2c3' }), { subject: 'a1b2c3' });
 		assert.equal(refusedBy('firstUser', { realmRole: 'a', subject: 'b' }), true);
+	});
+
+	test('bounds the step-up window from 1 second to an hour', () => {
+		assert.equal(valueOf('stepUpWindowSeconds', 1), 1);
+		assert.equal(valueOf('stepUpWindowSeconds', 3600), 3600);
+		assert.equal(refusedBy('stepUpWindowSeconds', 0), true);
+		assert.equal(refusedBy('stepUpWindowSeconds', 3601), true);
+	});
+
+	test('reads a step-up level as printable ASCII text', () => {
+		assert.equal(valueOf('stepUpLevel', 'confirmation'), 'confirmation');
+		assert.equal(valueOf('stepUpLevel', 'urn:example:loa:2'), 'urn:example:loa:2');
+	});
+
+	test("refuses a step-up level that is empty, not text, or an ordinary sign-in's level", () => {
+		assert.deepEqual(
+			['', 2, null, '0', '1', 'signin'].map((value) => refusedBy('stepUpLevel', value)),
+			[true, true, true, true, true, true],
+		);
+	});
+
+	test("refuses a step-up level that cannot stand in a challenge's quoted acr_values", () => {
+		assert.deepEqual(
+			['mfa two', 'mfa"', 'mfa\\', 'mfa\t', 'mfa\u0000', 'niveau-é'].map((value) =>
+				refusedBy('stepUpLevel', value),
+			),
+			[true, true, true, true, true, true],
+		);
 	});
 
 	test('reads the grant rules through the grant rules reader', () => {

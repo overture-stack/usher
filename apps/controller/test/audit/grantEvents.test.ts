@@ -11,12 +11,13 @@ import {
 	assertSucceeded,
 	changeGrantExpiry,
 	comparableRefusal,
+	steppedUpSignIn,
 	createGrant,
 	createSelfGrant,
 	decideGrantRequest,
 	deniedEventReason,
-	type GrantCreated,
 	GRANT_REVOCATION_REASONS,
+	type GrantCreated,
 	personCaller,
 	PROBLEMS,
 	revokeGrant,
@@ -302,7 +303,7 @@ suite('grant events', () => {
 		const since = markOf(log);
 
 		const grantId = createdId(
-			await createSelfGrant(await personCaller(harness, PEOPLE.owner), {
+			await createSelfGrant(await personCaller(harness, PEOPLE.owner, { mint: steppedUpSignIn() }), {
 				categories: [CONTROLLED],
 				expiresAt: instantIn(2 * HOUR_MS),
 				resource: RESOURCES.b2,

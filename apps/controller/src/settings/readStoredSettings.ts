@@ -62,6 +62,8 @@ export const readHeldSettings = (rows: readonly StoredSetting[]): HeldSettingsRe
 		retentionMarginSeconds: readStored(rows, 'retentionMarginSeconds'),
 		selfGrantMaximumLifetimeSeconds: readStored(rows, 'selfGrantMaximumLifetimeSeconds'),
 		signInTokenMaximumLifetimeSeconds: readStored(rows, 'signInTokenMaximumLifetimeSeconds'),
+		stepUpLevel: readStored(rows, 'stepUpLevel'),
+		stepUpWindowSeconds: readStored(rows, 'stepUpWindowSeconds'),
 		streamLimitPerAudience: readStored(rows, 'streamLimitPerAudience'),
 		streamMaximumLifetimeSeconds: readStored(rows, 'streamMaximumLifetimeSeconds'),
 		streamQueueLimit: readStored(rows, 'streamQueueLimit'),

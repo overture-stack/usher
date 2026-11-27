@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import { administratorCaller, createSelfGrant, nominate } from '../../testing/harness/admin.js';
+import { administratorCaller, steppedUpSignIn, createSelfGrant, nominate } from '../../testing/harness/admin.js';
 import { AUDIT_EVENT_TYPES, auditRows, dataOf, emittedType } from '../../testing/harness/auditEvents.js';
 import { CAST, CONTROLLED, grantsFixture, HOUR_MS, OPEN_STUDY, STUDY_A1 } from '../../testing/fixtures/grants.js';
 import { type Harness, withHarness } from '../../testing/harness/harness.js';
@@ -22,7 +22,10 @@ const selfCreations = async (harness: Harness): Promise<readonly Readonly<Record
 suite("an administrator's self-grant when nobody else could approve it", () => {
 	test('is granted at once to the only live administrator, on a resource with no counted owner, marked as such', async () => {
 		await withHarness({ fixture: grantsFixture() }, async (harness) => {
-			const granted = await createSelfGrant(await administratorCaller(harness), selfGrantOn(OPEN_STUDY));
+			const granted = await createSelfGrant(
+				await administratorCaller(harness, { mint: steppedUpSignIn() }),
+				selfGrantOn(OPEN_STUDY),
+			);
 
 			assert.equal(granted.status, 201);
 			assert.deepEqual(
@@ -34,7 +37,7 @@ suite("an administrator's self-grant when nobody else could approve it", () => {
 
 	test('counts no revoked administrator and no pending nomination as another who could approve', async () => {
 		await withHarness({ fixture: grantsFixture() }, async (harness) => {
-			const administrator = await administratorCaller(harness);
+			const administrator = await administratorCaller(harness, { mint: steppedUpSignIn() });
 			await administratorCaller(harness, { person: CAST.secondAdministrator });
 			await revokePrincipalInStore(harness.clients.migration, {
 				revokedBy: await userIdOf(harness.clients.migration, CAST.administrator.subject),

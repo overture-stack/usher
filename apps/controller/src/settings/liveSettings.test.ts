@@ -22,6 +22,8 @@ const HELD: HeldSettings = {
 	retentionMarginSeconds: 60,
 	selfGrantMaximumLifetimeSeconds: 86400,
 	signInTokenMaximumLifetimeSeconds: 300,
+	stepUpLevel: 'confirmation',
+	stepUpWindowSeconds: 300,
 	streamLimitPerAudience: 64,
 	streamMaximumLifetimeSeconds: 3600,
 	streamQueueLimit: 64,

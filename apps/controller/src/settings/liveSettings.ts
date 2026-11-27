@@ -78,6 +78,12 @@ export const liveSettingsOf = (
 	get signInTokenMaximumLifetimeSeconds() {
 		return source.current().signInTokenMaximumLifetimeSeconds;
 	},
+	get stepUpLevel() {
+		return source.current().stepUpLevel;
+	},
+	get stepUpWindowSeconds() {
+		return source.current().stepUpWindowSeconds;
+	},
 	get streamLimitPerAudience() {
 		return source.current().streamLimitPerAudience;
 	},

@@ -17,13 +17,15 @@ const SELF_GRANT_SETTING = 'selfGrantMaximumLifetimeSeconds';
 
 const SELF_GRANT_DEFAULT_SECONDS = 86_400;
 
-// The setting the grant operations migration adds, which the release at f7913299 did not hold.
-const LATER_SETTING = 'grantRateThreshold';
+// The settings later migrations add, which the release at f7913299 did not hold: the grant rate's
+// threshold, from the grant operations migration, and the step-up's, from the step-up settings
+// migration.
+const LATER_SETTINGS: ReadonlySet<string> = new Set(['grantRateThreshold', 'stepUpLevel', 'stepUpWindowSeconds']);
 
 // What the release at f7913299 seeded: every setting but the self-grant lifetime and the grant rate's threshold,
 // the values the harness gives its fixed settings and the defaults for the rest.
 const PRE_RELEASE_SETTINGS: Readonly<Partial<Settings>> = Object.fromEntries(
-	Object.entries(TEMPLATE_SETTINGS).filter(([name]) => name !== SELF_GRANT_SETTING && name !== LATER_SETTING),
+	Object.entries(TEMPLATE_SETTINGS).filter(([name]) => name !== SELF_GRANT_SETTING && !LATER_SETTINGS.has(name)),
 );
 
 const settingsHeld = (owner: pg.ClientBase, schema: string) =>

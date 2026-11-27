@@ -198,7 +198,12 @@ export const managementRoute = <Input>(
 		request: FastifyRequest,
 		reply: FastifyReply,
 		principal: Principal,
-		{ body, problem, recordedReason }: { body: Body; problem: Problem; recordedReason?: string },
+		{
+			body,
+			challenge,
+			problem,
+			recordedReason,
+		}: { body: Body; challenge?: string; problem: Problem; recordedReason?: string },
 	): Promise<FastifyReply> => {
 		await recordOperationEvent(request, principal, {
 			body,
@@ -206,7 +211,7 @@ export const managementRoute = <Input>(
 			result: 'denied',
 			severity: 'warning',
 		});
-		return sendProblem(reply, problem);
+		return sendProblem(reply, problem, challenge === undefined ? {} : { challenge });
 	};
 
 	// The refused subject is left out for a credential that did not verify, a token whose subject is
@@ -503,6 +508,7 @@ export const managementRoute = <Input>(
 			return refuse(request, reply, principal, {
 				body,
 				problem: outcome.problem,
+				...(outcome.challenge === undefined ? {} : { challenge: outcome.challenge }),
 				...(outcome.recordedReason === undefined ? {} : { recordedReason: outcome.recordedReason }),
 			});
 		},
@@ -510,7 +516,11 @@ export const managementRoute = <Input>(
 		onRequest: async (request, reply) => {
 			const admission = await authenticate(request);
 			if (admission.kind === 'refused') {
-				return sendProblem(reply, admission.problem, admission.retryAfterSeconds);
+				return sendProblem(
+					reply,
+					admission.problem,
+					admission.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: admission.retryAfterSeconds },
+				);
 			}
 			const problem = authorityProblem(admission.principal, admission.anyAdministrator);
 			if (problem !== undefined) {

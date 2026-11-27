@@ -8,7 +8,9 @@ suite("the management API's module", () => {
 		assert.deepEqual(Object.keys(managementApi).toSorted(), [
 			'AdministratorStatusWithdrawn',
 			'PROBLEMS',
+			'STEP_UP_REQUIRED',
 			'admittedAdministrator',
+			'judgeStepUp',
 			'managementRoute',
 			'pageOf',
 			'readPageQuery',

@@ -63,6 +63,7 @@ suite("reading a verified management token's claims", () => {
 			kind: 'accepted',
 			principal: {
 				firstUser: true,
+				signIn: {},
 				subject: 'subject-ana',
 				tokenLifetimeSeconds: 310,
 				type: 'human',
@@ -102,6 +103,7 @@ suite("reading a verified management token's claims", () => {
 
 		assert.deepEqual(reading.kind === 'accepted' ? Object.keys(reading.principal) : [], [
 			'firstUser',
+			'signIn',
 			'subject',
 			'tokenLifetimeSeconds',
 			'type',
@@ -117,10 +119,26 @@ suite("reading a verified management token's claims", () => {
 
 		assert.deepEqual(reading.kind === 'accepted' ? reading.principal : undefined, {
 			firstUser: true,
+			signIn: {},
 			subject: 'subject-ana',
 			tokenLifetimeSeconds: 310,
 			type: 'serviceAccount',
 		});
+	});
+
+	test("reads the sign-in's level from acr and its time from auth_time, in milliseconds", () => {
+		const reading = read({ acr: 'confirmation', auth_time: SECONDS - 30 });
+
+		assert.deepEqual(reading.kind === 'accepted' ? reading.principal.signIn : undefined, {
+			authenticatedAt: (SECONDS - 30) * 1000,
+			level: 'confirmation',
+		});
+	});
+
+	test('reads no level from an acr that is not text, and no time from an auth_time that is not a number, refusing neither', () => {
+		const reading = read({ acr: 2, auth_time: String(SECONDS) });
+
+		assert.deepEqual(reading.kind === 'accepted' ? reading.principal.signIn : undefined, {});
 	});
 
 	test('refuses a verified token other than an access token, an ID token among them, as otherType, naming its subject', () => {

@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
 import {
-	type AdminResponse,
 	administratorCaller,
+	type AdminResponse,
 	assertRefused,
 	assertSucceeded,
+	steppedUpSignIn,
 	createSelfGrant,
 	decideGrantRequest,
 	listGrantRequests,
@@ -270,7 +271,10 @@ suite('grant requests through the store', () => {
 	test("issues an owner's self-grant at once with their acceptance, telling the resource's other owners alone", async () => {
 		await withHarness({ fixture: twoOwners() }, async (harness) => {
 			const grantId = createdId(
-				await createSelfGrant(await personCaller(harness, CAST.ownerOfA1), selfGrantUntil(inTwoHours())),
+				await createSelfGrant(
+					await personCaller(harness, CAST.ownerOfA1, { mint: steppedUpSignIn() }),
+					selfGrantUntil(inTwoHours()),
+				),
 				"the owner's self-grant",
 			);
 

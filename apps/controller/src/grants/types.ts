@@ -680,8 +680,8 @@ export interface GrantOperationsSettings {
 
 	/**
 	 * Whether a grant is accepted at its creation, the clock each time written is read from, the
-	 * schema, the trusted issuer, the longest a self-grant or a grant asked for on a resource with no
-	 * counted owner lives, and the instance's submitter category.
+	 * step-up's level and window, the schema, the trusted issuer, the longest a self-grant or a
+	 * grant asked for on a resource with no counted owner lives, and the instance's submitter category.
 	 */
 	settings: Pick<
 		ControllerSettings,
@@ -690,6 +690,8 @@ export interface GrantOperationsSettings {
 		| 'grantAutoAccept'
 		| 'identityProviderIssuer'
 		| 'selfGrantMaximumLifetimeSeconds'
+		| 'stepUpLevel'
+		| 'stepUpWindowSeconds'
 		| 'submitterCategory'
 	>;
 

@@ -1,3 +1,5 @@
+export { STEP_UP_REQUIRED, judgeStepUp } from './judgeStepUp.js';
+export type { StepUpJudgement, StepUpSettings } from './judgeStepUp.js';
 export { managementRoute } from './managementRoute.js';
 export { pageOf, readPageQuery } from './pageQuery.js';
 export type { PageQuery, PageRules } from './pageQuery.js';
@@ -16,6 +18,7 @@ export type {
 	OperationOutcome,
 	Principal,
 	QueryParameters,
+	SignIn,
 	StoreReader,
 	UnverifiedCredentialReason,
 } from './types.js';
